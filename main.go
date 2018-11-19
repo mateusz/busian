@@ -36,7 +36,7 @@ func main() {
 	terra = make(map[uint32]*pixel.Sprite)
 
 	var err error
-	tmx, err = tiled.LoadFromFile("assets/map.tmx")
+	tmx, err = tiled.LoadFromFile("assets/map3.tmx")
 	if err != nil {
 		fmt.Printf("Error parsing map: %s\n", err)
 		os.Exit(2)
@@ -92,16 +92,14 @@ func run() {
 
 	win.SetSmooth(false)
 	cam1 := pixel.IM.Scaled(pixel.ZV, pixSize)
-	cam1 = cam1.Moved(pixel.V(float64(tmx.TileWidth)*pixSize/2, float64(tmx.TileHeight)*pixSize/2))
 	win.SetMatrix(cam1)
 
 	imd := imdraw.New(nil)
-	// I really don't know why.
-	cam2 := pixel.IM.Moved(pixel.V(float64(frictionMapRes)*-2, float64(frictionMapRes)*-2))
-	imd.SetMatrix(cam2)
 
 	px := 100.0
 	py := 100.0
+	pvx := 0.0
+	pvy := 0.0
 	last := time.Now()
 	for !win.Closed() {
 		dt := time.Since(last).Seconds()
@@ -110,21 +108,40 @@ func run() {
 		if win.Pressed(pixelgl.KeyEscape) {
 			break
 		}
-		// Offset car size
-		fr := posToFriction(px+4, py)
-		mv := (dt * 100) / float64(fr)
+		fr := posToFriction(px, py)
+		if fr == 5 {
+			fr = 3
+		}
+		mv := (dt * 50) / float64(fr)
+
+		powered := false
 		if win.Pressed(pixelgl.KeyRight) {
-			px += mv
+			pvx = mv
+			pvy = 0
+			powered = true
 		}
 		if win.Pressed(pixelgl.KeyLeft) {
-			px -= mv
+			pvx = -mv
+			pvy = 0
+			powered = true
 		}
 		if win.Pressed(pixelgl.KeyUp) {
-			py += mv
+			pvx = 0
+			pvy = mv
+			powered = true
 		}
 		if win.Pressed(pixelgl.KeyDown) {
-			py -= mv
+			pvx = 0
+			pvy = -mv
+			powered = true
 		}
+
+		if !powered {
+			pvx *= 0.95
+			pvy *= 0.95
+		}
+		px += pvx
+		py += pvy
 
 		imd.Clear()
 		win.Clear(colornames.Skyblue)
@@ -133,6 +150,11 @@ func run() {
 		drawCar(win, px, py)
 		if win.Pressed(pixelgl.KeyF) {
 			drawFrictionMap(imd)
+			drawCarPos(imd, px, py)
+		}
+		if win.Pressed(pixelgl.KeyD) {
+			fmt.Printf("pos=%+v,%+v\n", px, py)
+			fmt.Printf("fr=%+v\n", posToFriction(px, py))
 		}
 
 		imd.Draw(win)
@@ -222,7 +244,7 @@ func loadFrictionMap(m *tiled.Map, frictionMap *[][]int) error {
 						return err
 					}
 
-					(*frictionMap)[x*frictionMapRes+fx][y*frictionMapRes+fy] = fv
+					(*frictionMap)[x*frictionMapRes+fx][(m.Height-1-y)*frictionMapRes+fy] = fv
 				}
 			}
 		}
@@ -242,20 +264,17 @@ func findTileInTileset(lt *tiled.LayerTile) (*tiled.TilesetTile, error) {
 }
 
 func tileVec(x int, y int) pixel.Vec {
-	return pixel.V(float64(x*(tmx.TileWidth)), float64(y*tmx.TileHeight))
+	// Some offesting due to the tiles being referenced via the centre
+	ox := tmx.TileWidth / 2
+	oy := tmx.TileHeight / 2
+	return pixel.V(float64(x*(tmx.TileWidth)+ox), float64(y*tmx.TileHeight+oy))
 }
 
 func posToFriction(px, py float64) int {
 	x := int(math.Round(px))
 	y := int(math.Round(py))
-	if x < 0 || x > tmx.Width*tmx.TileWidth {
-		return -1
-	}
-	if y < 0 || y > tmx.Height*tmx.TileHeight {
-		return -1
-	}
-	fx := int(math.Round(float64(x) / float64(frictionMapRes)))
-	fy := int(math.Round(float64(y) / float64(frictionMapRes)))
+	fx := int(math.Floor(float64(x) / float64(frictionMapRes)))
+	fy := int(math.Floor(float64(y) / float64(frictionMapRes)))
 	return frictionMap[fx][fy]
 }
 
@@ -287,4 +306,11 @@ func drawFrictionMap(imd *imdraw.IMDraw) {
 			imd.Rectangle(0)
 		}
 	}
+}
+
+func drawCarPos(imd *imdraw.IMDraw, px, py float64) {
+	imd.Color = colornames.White
+	imd.Push(pixel.V(px-1, py-1))
+	imd.Push(pixel.V(px+1, py+1))
+	imd.Rectangle(0)
 }

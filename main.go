@@ -28,6 +28,7 @@ const (
 var (
 	terra       map[uint32]*pixel.Sprite
 	car         *pixel.Sprite
+	police      *pixel.Sprite
 	tmx         *tiled.Map
 	frictionMap [][]int
 )
@@ -36,7 +37,7 @@ func main() {
 	terra = make(map[uint32]*pixel.Sprite)
 
 	var err error
-	tmx, err = tiled.LoadFromFile("assets/map3.tmx")
+	tmx, err = tiled.LoadFromFile("assets/map.tmx")
 	if err != nil {
 		fmt.Printf("Error parsing map: %s\n", err)
 		os.Exit(2)
@@ -53,19 +54,17 @@ func main() {
 		os.Exit(2)
 	}
 
-	file, err := os.Open(tmx.GetFileFullPath("car_test.png"))
+	car, err = load("car_test.png")
 	if err != nil {
-		fmt.Printf("Error opening car: %s\n", err)
+		fmt.Printf("Error loading car: %s\n", err)
 		os.Exit(2)
 	}
-	defer file.Close()
-	img, _, err := image.Decode(file)
+
+	police, err = load("car_police.png")
 	if err != nil {
-		fmt.Printf("Error decoding car: %s\n", err)
+		fmt.Printf("Error loading police: %s\n", err)
 		os.Exit(2)
 	}
-	pic := pixel.PictureDataFromImage(img)
-	car = pixel.NewSprite(pic, pic.Bounds())
 
 	pixelgl.Run(run)
 }
@@ -96,10 +95,10 @@ func run() {
 
 	imd := imdraw.New(nil)
 
+	cx := 10.0
+	cy := 10.0
 	px := 100.0
 	py := 100.0
-	pvx := 0.0
-	pvy := 0.0
 	last := time.Now()
 	for !win.Closed() {
 		dt := time.Since(last).Seconds()
@@ -108,53 +107,52 @@ func run() {
 		if win.Pressed(pixelgl.KeyEscape) {
 			break
 		}
-		fr := posToFriction(px, py)
+
+		fr := posToFriction(px, py-1)
 		if fr == 5 {
 			fr = 3
 		}
-		mv := (dt * 50) / float64(fr)
-
-		powered := false
+		mv := (dt * 25) / float64(fr)
 		if win.Pressed(pixelgl.KeyRight) {
-			pvx = mv
-			pvy = 0
-			powered = true
+			px += mv
 		}
 		if win.Pressed(pixelgl.KeyLeft) {
-			pvx = -mv
-			pvy = 0
-			powered = true
+			px -= mv
 		}
 		if win.Pressed(pixelgl.KeyUp) {
-			pvx = 0
-			pvy = mv
-			powered = true
+			py += mv
 		}
 		if win.Pressed(pixelgl.KeyDown) {
-			pvx = 0
-			pvy = -mv
-			powered = true
+			py -= mv
 		}
 
-		if !powered {
-			pvx *= 0.95
-			pvy *= 0.95
+		fr = posToFriction(cx, cy-1)
+		if fr == 5 {
+			fr = 3
 		}
-		px += pvx
-		py += pvy
-
+		mv = (dt * 15) / float64(fr)
+		if win.Pressed(pixelgl.KeyD) {
+			cx += mv
+		}
+		if win.Pressed(pixelgl.KeyA) {
+			cx -= mv
+		}
+		if win.Pressed(pixelgl.KeyW) {
+			cy += mv
+		}
+		if win.Pressed(pixelgl.KeyS) {
+			cy -= mv
+		}
 		imd.Clear()
 		win.Clear(colornames.Skyblue)
 
 		drawMap(win)
-		drawCar(win, px, py)
+		drawCar(win, police, px, py)
+		drawCar(win, car, cx, cy)
 		if win.Pressed(pixelgl.KeyF) {
 			drawFrictionMap(imd)
 			drawCarPos(imd, px, py)
-		}
-		if win.Pressed(pixelgl.KeyD) {
-			fmt.Printf("pos=%+v,%+v\n", px, py)
-			fmt.Printf("fr=%+v\n", posToFriction(px, py))
+			drawCarPos(imd, cx, cy)
 		}
 
 		imd.Draw(win)
@@ -253,6 +251,20 @@ func loadFrictionMap(m *tiled.Map, frictionMap *[][]int) error {
 	return nil
 }
 
+func load(path string) (*pixel.Sprite, error) {
+	file, err := os.Open(tmx.GetFileFullPath(path))
+	if err != nil {
+		return nil, fmt.Errorf("error opening car: %s", err)
+	}
+	defer file.Close()
+	img, _, err := image.Decode(file)
+	if err != nil {
+		return nil, fmt.Errorf("error decoding car: %s", err)
+	}
+	pic := pixel.PictureDataFromImage(img)
+	return pixel.NewSprite(pic, pic.Bounds()), nil
+}
+
 func findTileInTileset(lt *tiled.LayerTile) (*tiled.TilesetTile, error) {
 	for _, t := range lt.Tileset.Tiles {
 		if t.ID == lt.ID {
@@ -288,8 +300,8 @@ func drawMap(win *pixelgl.Window) {
 	}
 }
 
-func drawCar(win *pixelgl.Window, px, py float64) {
-	car.Draw(win, pixel.IM.Moved(pixel.V(px, py)))
+func drawCar(win *pixelgl.Window, sprite *pixel.Sprite, x, y float64) {
+	sprite.Draw(win, pixel.IM.Moved(pixel.V(x, y)))
 }
 
 func drawFrictionMap(imd *imdraw.IMDraw) {
@@ -310,7 +322,7 @@ func drawFrictionMap(imd *imdraw.IMDraw) {
 
 func drawCarPos(imd *imdraw.IMDraw, px, py float64) {
 	imd.Color = colornames.White
-	imd.Push(pixel.V(px-1, py-1))
-	imd.Push(pixel.V(px+1, py+1))
+	imd.Push(pixel.V(px-1, py-1-1))
+	imd.Push(pixel.V(px+1, py+1-1))
 	imd.Rectangle(0)
 }

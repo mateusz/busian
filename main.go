@@ -26,23 +26,39 @@ const (
 )
 
 var (
-	terra       map[uint32]*pixel.Sprite
-	car         *pixel.Sprite
-	police      *pixel.Sprite
+	terra       tileset
+	car         mobile
+	police      mobile
 	tmx         *tiled.Map
 	frictionMap [][]int
 )
 
-func main() {
-	terra = make(map[uint32]*pixel.Sprite)
+type mobile struct {
+	// World position
+	wp pixel.Vec
+	// Velocity
+	v      pixel.Vec
+	sprite *pixel.Sprite
+}
 
+type tileset struct {
+	tiles map[uint32]*pixel.Sprite
+}
+
+func newTileset() tileset {
+	t := tileset{}
+	t.tiles = make(map[uint32]*pixel.Sprite)
+	return t
+}
+
+func main() {
 	var err error
 	tmx, err = tiled.LoadFromFile("assets/map.tmx")
 	if err != nil {
 		fmt.Printf("Error parsing map: %s\n", err)
 		os.Exit(2)
 	}
-	err = loadMissing(tmx)
+	terra, err = tilesetFromTmx(tmx)
 	if err != nil {
 		fmt.Printf("Error loading aux tilesets: %s\n", err)
 		os.Exit(2)
@@ -54,13 +70,13 @@ func main() {
 		os.Exit(2)
 	}
 
-	car, err = load("car_test.png")
+	car.sprite, err = load("car_test.png")
 	if err != nil {
 		fmt.Printf("Error loading car: %s\n", err)
 		os.Exit(2)
 	}
 
-	police, err = load("car_police.png")
+	police.sprite, err = load("car_police.png")
 	if err != nil {
 		fmt.Printf("Error loading police: %s\n", err)
 		os.Exit(2)
@@ -95,10 +111,8 @@ func run() {
 
 	imd := imdraw.New(nil)
 
-	cx := 10.0
-	cy := 10.0
-	px := 100.0
-	py := 100.0
+	car.wp = pixel.Vec{10.0, 10.0}
+	police.wp = pixel.Vec{100.0, 100.0}
 	last := time.Now()
 	for !win.Closed() {
 		dt := time.Since(last).Seconds()
@@ -108,51 +122,61 @@ func run() {
 			break
 		}
 
-		fr := posToFriction(px, py-1)
+		// Steer police
+		police.v = pixel.ZV
+		fr := posToFriction(police.wp.X, police.wp.Y-1)
 		if fr == 5 {
 			fr = 3
 		}
 		mv := (dt * 25) / float64(fr)
 		if win.Pressed(pixelgl.KeyRight) {
-			px += mv
+			police.v.X = mv
 		}
 		if win.Pressed(pixelgl.KeyLeft) {
-			px -= mv
+			police.v.X = -mv
 		}
 		if win.Pressed(pixelgl.KeyUp) {
-			py += mv
+			police.v.Y = mv
 		}
 		if win.Pressed(pixelgl.KeyDown) {
-			py -= mv
+			police.v.Y = -mv
 		}
 
-		fr = posToFriction(cx, cy-1)
+		// Steer car
+		car.v = pixel.ZV
+		fr = posToFriction(car.wp.X, car.wp.Y-1)
 		if fr == 5 {
 			fr = 3
 		}
 		mv = (dt * 15) / float64(fr)
 		if win.Pressed(pixelgl.KeyD) {
-			cx += mv
+			car.v.X = mv
 		}
 		if win.Pressed(pixelgl.KeyA) {
-			cx -= mv
+			car.v.X = -mv
 		}
 		if win.Pressed(pixelgl.KeyW) {
-			cy += mv
+			car.v.Y = mv
 		}
 		if win.Pressed(pixelgl.KeyS) {
-			cy -= mv
+			car.v.Y = -mv
 		}
+
+		// Apply velocity
+		car.wp = car.wp.Add(car.v)
+		police.wp = police.wp.Add(police.v)
+
+		// Draw
 		imd.Clear()
 		win.Clear(colornames.Skyblue)
 
 		drawMap(win)
-		drawCar(win, police, px, py)
-		drawCar(win, car, cx, cy)
+		drawCar(win, &police)
+		drawCar(win, &car)
 		if win.Pressed(pixelgl.KeyF) {
 			drawFrictionMap(imd)
-			drawCarPos(imd, px, py)
-			drawCarPos(imd, cx, cy)
+			drawCarPos(imd, &car)
+			drawCarPos(imd, &police)
 		}
 
 		imd.Draw(win)
@@ -160,18 +184,21 @@ func run() {
 	}
 }
 
-func loadMissing(m *tiled.Map) error {
+// TMX library does not load images. Help it out.
+func tilesetFromTmx(m *tiled.Map) (tileset, error) {
+	tiles := newTileset()
 	for _, ts := range m.Tilesets {
-		err := sideloadTSXForTileset(m, ts)
+		err := tiles.sideloadTSXForTileset(m, ts)
 		if err != nil {
-			return err
+			return tiles, err
 		}
 	}
 
-	return nil
+	return tiles, nil
 }
 
-func sideloadTSXForTileset(m *tiled.Map, ts *tiled.Tileset) error {
+// Load tileset graphic tiles into the "terra" array.
+func (tileset tileset) sideloadTSXForTileset(m *tiled.Map, ts *tiled.Tileset) error {
 	if ts.Source == "" {
 		return nil
 	}
@@ -205,12 +232,14 @@ func sideloadTSXForTileset(m *tiled.Map, ts *tiled.Tileset) error {
 		}
 
 		pic := pixel.PictureDataFromImage(img)
-		terra[t.ID] = pixel.NewSprite(pic, pic.Bounds())
+		tileset.tiles[t.ID] = pixel.NewSprite(pic, pic.Bounds())
 	}
 
 	return nil
 }
 
+// Friction map is an overlay to work out if the car is on the road or not.
+// Friction data is stored in the Tiled's tile metadata node "friction" at a lower resolution (4x4).
 func loadFrictionMap(m *tiled.Map, frictionMap *[][]int) error {
 	*frictionMap = make([][]int, m.Width*frictionMapRes)
 	for i := range *frictionMap {
@@ -251,6 +280,7 @@ func loadFrictionMap(m *tiled.Map, frictionMap *[][]int) error {
 	return nil
 }
 
+// Get sprite from file.
 func load(path string) (*pixel.Sprite, error) {
 	file, err := os.Open(tmx.GetFileFullPath(path))
 	if err != nil {
@@ -275,6 +305,7 @@ func findTileInTileset(lt *tiled.LayerTile) (*tiled.TilesetTile, error) {
 	return nil, fmt.Errorf("Something is very wrong, tile ID '%d' not found in the tileset", lt.ID)
 }
 
+// Convert tile coords (x,y) to world coordinates.
 func tileVec(x int, y int) pixel.Vec {
 	// Some offesting due to the tiles being referenced via the centre
 	ox := tmx.TileWidth / 2
@@ -282,6 +313,7 @@ func tileVec(x int, y int) pixel.Vec {
 	return pixel.V(float64(x*(tmx.TileWidth)+ox), float64(y*tmx.TileHeight+oy))
 }
 
+// Read friction from the preloaded friction map based on world coordinates (px,py).
 func posToFriction(px, py float64) int {
 	x := int(math.Round(px))
 	y := int(math.Round(py))
@@ -295,15 +327,16 @@ func drawMap(win *pixelgl.Window) {
 	for y := 0; y < tmx.Height; y++ {
 		for x := 0; x < tmx.Width; x++ {
 			lt := l.Tiles[y*tmx.Width+x]
-			terra[lt.ID].Draw(win, pixel.IM.Moved(tileVec(x, tmx.Height-y-1)))
+			terra.tiles[lt.ID].Draw(win, pixel.IM.Moved(tileVec(x, tmx.Height-y-1)))
 		}
 	}
 }
 
-func drawCar(win *pixelgl.Window, sprite *pixel.Sprite, x, y float64) {
-	sprite.Draw(win, pixel.IM.Moved(pixel.V(x, y)))
+func drawCar(win *pixelgl.Window, m *mobile) {
+	m.sprite.Draw(win, pixel.IM.Moved(m.wp))
 }
 
+// Debug helper
 func drawFrictionMap(imd *imdraw.IMDraw) {
 	for y := 0; y < tmx.Height*frictionMapRes; y++ {
 		for x := 0; x < tmx.Width*frictionMapRes; x++ {
@@ -320,9 +353,10 @@ func drawFrictionMap(imd *imdraw.IMDraw) {
 	}
 }
 
-func drawCarPos(imd *imdraw.IMDraw, px, py float64) {
+// Debug helper
+func drawCarPos(imd *imdraw.IMDraw, m *mobile) {
 	imd.Color = colornames.White
-	imd.Push(pixel.V(px-1, py-1-1))
-	imd.Push(pixel.V(px+1, py+1-1))
+	imd.Push(pixel.V(m.wp.X-1, m.wp.Y-1-1))
+	imd.Push(pixel.V(m.wp.X+1, m.wp.Y+1-1))
 	imd.Rectangle(0)
 }

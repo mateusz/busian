@@ -9,6 +9,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -33,6 +34,7 @@ const (
 
 var (
 	terra       spriteset
+	mobs        []*mobile
 	car         mobile
 	police      mobile
 	tmx         *tiled.Map
@@ -99,17 +101,19 @@ func main() {
 		os.Exit(2)
 	}
 
-	mobs, err := newSpritesetFromTsx("assets", "busian_mobs.tsx")
+	mobSprites, err := newSpritesetFromTsx("assets", "busian_mobs.tsx")
 	if err != nil {
 		fmt.Printf("Error loading mobs: %s\n", err)
 		os.Exit(2)
 	}
 
-	car.spriteset = &mobs
+	car.spriteset = &mobSprites
 	car.startID = 0
 
-	police.spriteset = &mobs
+	police.spriteset = &mobSprites
 	police.startID = 0
+
+	mobs = []*mobile{&car, &police}
 
 	pixelgl.Run(run)
 }
@@ -200,12 +204,15 @@ func run() {
 		win.Clear(colornames.Skyblue)
 
 		drawMap(win)
-		drawCar(win, &police)
-		drawCar(win, &car)
 		if win.Pressed(pixelgl.KeyF) {
 			drawFrictionMap(imd)
-			drawCarPos(imd, &car)
-			drawCarPos(imd, &police)
+		}
+
+		sort.Slice(mobs, func(i, j int) bool {
+			return mobs[i].wp.Y > mobs[j].wp.Y
+		})
+		for _, mob := range mobs {
+			drawMob(win, mob)
 		}
 
 		imd.Draw(win)
@@ -393,7 +400,7 @@ func drawMap(win *pixelgl.Window) {
 	}
 }
 
-func drawCar(win *pixelgl.Window, m *mobile) {
+func drawMob(win *pixelgl.Window, m *mobile) {
 	m.dirToSpr(m.v.X, m.v.Y).Draw(win, pixel.IM.Moved(m.wp))
 }
 

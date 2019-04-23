@@ -3,10 +3,12 @@ package main
 import (
 	"encoding/csv"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"image"
 	"math"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -23,10 +25,14 @@ import (
 const (
 	// How many friction map cells per map tile.
 	frictionMapRes = 4
+	sprDirRight    = 0
+	sprDirUp       = 1
+	sprDirDown     = 2
+	sprDirLeft     = 3
 )
 
 var (
-	terra       tileset
+	terra       spriteset
 	car         mobile
 	police      mobile
 	tmx         *tiled.Map
@@ -37,28 +43,51 @@ type mobile struct {
 	// World position
 	wp pixel.Vec
 	// Velocity
-	v      pixel.Vec
-	sprite *pixel.Sprite
+	v         pixel.Vec
+	spriteset *spriteset
+	startID   uint32
+	stickyDir uint32
 }
 
-type tileset struct {
-	tiles map[uint32]*pixel.Sprite
+func (m *mobile) dirToSpr(dx, dy float64) *pixel.Sprite {
+	if dx > 0 {
+		m.stickyDir = sprDirRight
+	}
+	if dx < 0 {
+		m.stickyDir = sprDirLeft
+	}
+	if dy > 0 {
+		m.stickyDir = sprDirUp
+	}
+	if dy < 0 {
+		m.stickyDir = sprDirDown
+	}
+	// ... and if 0,0, then use the old stickyDir so that the car doesn't randomly
+	// flip after stopping!
+
+	return m.spriteset.sprites[m.startID+m.stickyDir]
 }
 
-func newTileset() tileset {
-	t := tileset{}
-	t.tiles = make(map[uint32]*pixel.Sprite)
+type spriteset struct {
+	sprites  map[uint32]*pixel.Sprite
+	tileset  *tiled.Tileset
+	basePath string
+}
+
+func newSpriteset() spriteset {
+	t := spriteset{}
+	t.sprites = make(map[uint32]*pixel.Sprite)
 	return t
 }
 
 func main() {
 	var err error
-	tmx, err = tiled.LoadFromFile("assets/map.tmx")
+	tmx, err = tiled.LoadFromFile("assets/map3.tmx")
 	if err != nil {
 		fmt.Printf("Error parsing map: %s\n", err)
 		os.Exit(2)
 	}
-	terra, err = tilesetFromTmx(tmx)
+	terra, err = fillMissingMapPieces(tmx)
 	if err != nil {
 		fmt.Printf("Error loading aux tilesets: %s\n", err)
 		os.Exit(2)
@@ -70,17 +99,17 @@ func main() {
 		os.Exit(2)
 	}
 
-	car.sprite, err = load("car_test.png")
+	mobs, err := newSpritesetFromTsx("assets", "busian_mobs.tsx")
 	if err != nil {
-		fmt.Printf("Error loading car: %s\n", err)
+		fmt.Printf("Error loading mobs: %s\n", err)
 		os.Exit(2)
 	}
 
-	police.sprite, err = load("car_police.png")
-	if err != nil {
-		fmt.Printf("Error loading police: %s\n", err)
-		os.Exit(2)
-	}
+	car.spriteset = &mobs
+	car.startID = 0
+
+	police.spriteset = &mobs
+	police.startID = 0
 
 	pixelgl.Run(run)
 }
@@ -185,34 +214,66 @@ func run() {
 }
 
 // TMX library does not load images. Help it out.
-func tilesetFromTmx(m *tiled.Map) (tileset, error) {
-	tiles := newTileset()
+func fillMissingMapPieces(m *tiled.Map) (spriteset, error) {
+	spr := spriteset{}
+	var err error
 	for _, ts := range m.Tilesets {
-		err := tiles.sideloadTSXForTileset(m, ts)
-		if err != nil {
-			return tiles, err
+		if ts.Source == "" {
+			return spr, errors.New("Tileset has no source")
 		}
+		spr, err = newSpritesetFromTileset(m.GetFileFullPath(""), ts)
+		if err != nil {
+			return spr, err
+		}
+
+		// Only one permitted at the moment.
+		break
 	}
 
-	return tiles, nil
+	return spr, nil
 }
 
-// Load tileset graphic tiles into the "terra" array.
-func (tileset tileset) sideloadTSXForTileset(m *tiled.Map, ts *tiled.Tileset) error {
-	if ts.Source == "" {
-		return nil
+func newSpritesetFromTsx(basePath, path string) (spriteset, error) {
+	spr := spriteset{}
+	ts := &tiled.Tileset{Source: path}
+
+	f, err := os.Open(filepath.Join(basePath, ts.Source))
+	if err != nil {
+		return spr, err
 	}
-	f, err := os.Open(m.GetFileFullPath(ts.Source))
+	defer f.Close()
+
+	d := xml.NewDecoder(f)
+	if err := d.Decode(ts); err != nil {
+		return spr, err
+	}
+
+	spr, err = newSpritesetFromTileset(basePath, ts)
+	if err != nil {
+		return spr, err
+	}
+
+	spr.tileset = ts
+	return spr, nil
+}
+
+// Load actual sprite files and associate with tileset.
+func newSpritesetFromTileset(basePath string, ts *tiled.Tileset) (spriteset, error) {
+	spr := newSpriteset()
+	spr.tileset = ts
+	spr.basePath = basePath
+
+	f, err := os.Open(filepath.Join(basePath, ts.Source))
 
 	if err != nil {
-		return err
+		return spr, err
 	}
 	defer f.Close()
 
 	d := xml.NewDecoder(f)
 
 	if err := d.Decode(ts); err != nil {
-		return err
+		return spr, err
 	}
 
 	for _, t := range ts.Tiles {
@@ -220,22 +281,22 @@ func (tileset tileset) sideloadTSXForTileset(m *tiled.Map, ts *tiled.Tileset) er
 			continue
 		}
 
-		file, err := os.Open(m.GetFileFullPath(t.Image.Source))
+		file, err := os.Open(filepath.Join(basePath, t.Image.Source))
 		if err != nil {
-			return err
+			return spr, err
 		}
 		defer file.Close()
 
 		img, _, err := image.Decode(file)
 		if err != nil {
-			return err
+			return spr, err
 		}
 
 		pic := pixel.PictureDataFromImage(img)
-		tileset.tiles[t.ID] = pixel.NewSprite(pic, pic.Bounds())
+		spr.sprites[t.ID] = pixel.NewSprite(pic, pic.Bounds())
 	}
 
-	return nil
+	return spr, nil
 }
 
 // Friction map is an overlay to work out if the car is on the road or not.
@@ -327,13 +388,13 @@ func drawMap(win *pixelgl.Window) {
 	for y := 0; y < tmx.Height; y++ {
 		for x := 0; x < tmx.Width; x++ {
 			lt := l.Tiles[y*tmx.Width+x]
-			terra.tiles[lt.ID].Draw(win, pixel.IM.Moved(tileVec(x, tmx.Height-y-1)))
+			terra.sprites[lt.ID].Draw(win, pixel.IM.Moved(tileVec(x, tmx.Height-y-1)))
 		}
 	}
 }
 
 func drawCar(win *pixelgl.Window, m *mobile) {
-	m.sprite.Draw(win, pixel.IM.Moved(m.wp))
+	m.dirToSpr(m.v.X, m.v.Y).Draw(win, pixel.IM.Moved(m.wp))
 }
 
 // Debug helper

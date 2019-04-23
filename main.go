@@ -124,7 +124,7 @@ func run() {
 	monW, monH := monitor.Size()
 	pixH := monH / float64(tmx.Height*tmx.TileHeight)
 	pixW := monW / float64(tmx.Width*tmx.TileWidth)
-	pixSize := math.Floor(math.Min(pixH, pixW))
+	pixSize := math.Floor(math.Min(pixH, pixW)) * 4
 
 	cfg := pixelgl.WindowConfig{
 		Title:   "Busian",
@@ -155,13 +155,19 @@ func run() {
 			break
 		}
 
+		// Move camera
+		cam := pixel.IM.Scaled(pixel.ZV, pixSize)
+		cam = cam.Moved(pixel.Vec{-police.wp.X, -police.wp.Y}.Scaled(pixSize).Add(pixel.Vec{monW / 2.0, monH / 2.0}))
+		win.SetMatrix(cam)
+
+		var mv float64
 		// Steer police
 		police.v = pixel.ZV
 		fr := posToFriction(police.wp.X, police.wp.Y-1)
-		if fr == 5 {
-			fr = 3
+		if fr == -1 {
+			fr = 10
 		}
-		mv := (dt * 25) / float64(fr)
+		mv = (dt * 25) / fr
 		if win.Pressed(pixelgl.KeyRight) {
 			police.v.X = mv
 		}
@@ -178,10 +184,10 @@ func run() {
 		// Steer car
 		car.v = pixel.ZV
 		fr = posToFriction(car.wp.X, car.wp.Y-1)
-		if fr == 5 {
-			fr = 3
+		if fr == -1 {
+			fr = 10
 		}
-		mv = (dt * 15) / float64(fr)
+		mv = (dt * 25) / fr
 		if win.Pressed(pixelgl.KeyD) {
 			car.v.X = mv
 		}
@@ -201,7 +207,7 @@ func run() {
 
 		// Draw
 		imd.Clear()
-		win.Clear(colornames.Skyblue)
+		win.Clear(colornames.Green)
 
 		drawMap(win)
 		if win.Pressed(pixelgl.KeyF) {
@@ -382,12 +388,19 @@ func tileVec(x int, y int) pixel.Vec {
 }
 
 // Read friction from the preloaded friction map based on world coordinates (px,py).
-func posToFriction(px, py float64) int {
+func posToFriction(px, py float64) float64 {
 	x := int(math.Round(px))
 	y := int(math.Round(py))
 	fx := int(math.Floor(float64(x) / float64(frictionMapRes)))
 	fy := int(math.Floor(float64(y) / float64(frictionMapRes)))
-	return frictionMap[fx][fy]
+	if fx < 0 || fx >= len(frictionMap) {
+		return -1
+	}
+	if fy < 0 || fy >= len(frictionMap[fx]) {
+		return -1
+	}
+
+	return float64(frictionMap[fx][fy])
 }
 
 func drawMap(win *pixelgl.Window) {
@@ -395,7 +408,8 @@ func drawMap(win *pixelgl.Window) {
 	for y := 0; y < tmx.Height; y++ {
 		for x := 0; x < tmx.Width; x++ {
 			lt := l.Tiles[y*tmx.Width+x]
-			terra.sprites[lt.ID].Draw(win, pixel.IM.Moved(tileVec(x, tmx.Height-y-1)))
+			// Note: scaling 1.001 is used her to prevent transparent artifacts between tiles at times.
+			terra.sprites[lt.ID].Draw(win, pixel.IM.Scaled(pixel.ZV, 1.001).Moved(tileVec(x, tmx.Height-y-1)))
 		}
 	}
 }

@@ -84,7 +84,7 @@ func newSpriteset() spriteset {
 
 func main() {
 	var err error
-	tmx, err = tiled.LoadFromFile("assets/map3.tmx")
+	tmx, err = tiled.LoadFromFile("assets/map5.tmx")
 	if err != nil {
 		fmt.Printf("Error parsing map: %s\n", err)
 		os.Exit(2)
@@ -111,7 +111,7 @@ func main() {
 	car.startID = 0
 
 	police.spriteset = &mobSprites
-	police.startID = 0
+	police.startID = 4
 
 	mobs = []*mobile{&car, &police}
 

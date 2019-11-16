@@ -12,3 +12,5 @@ require (
 	golang.org/x/image v0.0.0-20181109232246-249dc8530c0e
 	rsc.io/quote v1.5.2
 )
+
+go 1.13

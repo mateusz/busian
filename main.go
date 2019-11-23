@@ -84,7 +84,7 @@ func newSpriteset() spriteset {
 
 func main() {
 	var err error
-	tmx, err = tiled.LoadFromFile("assets/map5.tmx")
+	tmx, err = tiled.LoadFromFile("assets/map4.tmx")
 	if err != nil {
 		fmt.Printf("Error parsing map: %s\n", err)
 		os.Exit(2)

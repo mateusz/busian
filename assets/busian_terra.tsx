@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<tileset version="1.2" tiledversion="1.2.1" name="busian_terra" tilewidth="16" tileheight="16" tilecount="12" columns="0">
+<tileset version="1.2" tiledversion="1.3.0" name="busian_terra" tilewidth="16" tileheight="16" tilecount="16" columns="0">
  <grid orientation="orthogonal" width="1" height="1"/>
  <tile id="4">
   <properties>
@@ -72,5 +72,29 @@
    <property name="friction" value="3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3"/>
   </properties>
   <image width="16" height="16" source="ground.png"/>
+ </tile>
+ <tile id="17">
+  <properties>
+   <property name="friction" value="3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3"/>
+  </properties>
+  <image width="16" height="16" source="budynek1.png"/>
+ </tile>
+ <tile id="18">
+  <properties>
+   <property name="friction" value="3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3"/>
+  </properties>
+  <image width="16" height="16" source="station1.png"/>
+ </tile>
+ <tile id="19">
+  <properties>
+   <property name="friction" value="3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3"/>
+  </properties>
+  <image width="16" height="16" source="track1.png"/>
+ </tile>
+ <tile id="20">
+  <properties>
+   <property name="friction" value="3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3"/>
+  </properties>
+  <image width="16" height="16" source="station2.png"/>
  </tile>
 </tileset>

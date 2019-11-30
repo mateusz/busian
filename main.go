@@ -17,10 +17,12 @@ import (
 	_ "image/png"
 
 	"github.com/faiface/pixel"
+	"github.com/faiface/pixel/text"
 	"github.com/faiface/pixel/imdraw"
 	"github.com/faiface/pixel/pixelgl"
 	"github.com/lafriks/go-tiled"
 	"golang.org/x/image/colornames"
+	"golang.org/x/image/font/basicfont"
 )
 
 const (
@@ -138,27 +140,40 @@ func run() {
 		panic(err)
 	}
 
+	// Zoom in to get nic pixels
 	win.SetSmooth(false)
-	cam1 := pixel.IM.Scaled(pixel.ZV, pixSize)
-	win.SetMatrix(cam1)
+	win.SetMatrix(pixel.IM.Scaled(pixel.ZV, pixSize))
 
-	imd := imdraw.New(nil)
+	frictionMap := imdraw.New(nil)
+	drawFrictionMap(frictionMap)
 
-	car.wp = pixel.Vec{100.0, 10.0}
-	police.wp = pixel.Vec{100.0, 30.0}
+	worldMap := pixelgl.NewCanvas(pixel.R(0, 0, monW, monH))
+	drawMap(worldMap)
+
+	hud := pixelgl.NewCanvas(pixel.R(0, 0, monW, monH))
+
+	car.wp = pixel.Vec{X: 100.0, Y: 10.0}
+	police.wp = pixel.Vec{X: 100.0, Y: 30.0}
 	last := time.Now()
-	for !win.Closed() {
-		dt := time.Since(last).Seconds()
-		last = time.Now()
 
+	fps := text.New(pixel.ZV, text.NewAtlas(basicfont.Face7x13, text.ASCII))
+
+	for !win.Closed() {
 		if win.Pressed(pixelgl.KeyEscape) {
 			break
 		}
 
+		dt := time.Since(last).Seconds()
+		last = time.Now()
+
 		// Move camera
 		cam := pixel.IM.Scaled(pixel.ZV, pixSize)
-		cam = cam.Moved(pixel.Vec{-police.wp.X, -police.wp.Y}.Scaled(pixSize).Add(pixel.Vec{monW / 2.0, monH / 2.0}))
+		cam = cam.Moved(pixel.Vec{X: -police.wp.X, Y: -police.wp.Y}.Scaled(pixSize).Add(pixel.Vec{monW / 2.0, monH / 2.0}))
 		win.SetMatrix(cam)
+
+		fps.Clear()
+		fmt.Fprintf(fps, "%.0f", 1/dt)
+		fps.Draw(hud, pixel.IM)
 
 		var mv float64
 		// Steer police
@@ -206,12 +221,15 @@ func run() {
 		police.wp = police.wp.Add(police.v)
 
 		// Draw
-		imd.Clear()
 		win.Clear(colornames.Green)
 
-		drawMap(win)
+		worldMap.Draw(win, pixel.IM.Moved(pixel.Vec{
+			X:worldMap.Bounds().W()/2.0,
+			Y:worldMap.Bounds().H()/2.0,
+		}))
+
 		if win.Pressed(pixelgl.KeyF) {
-			drawFrictionMap(imd)
+			frictionMap.Draw(win)
 		}
 
 		sort.Slice(mobs, func(i, j int) bool {
@@ -221,7 +239,8 @@ func run() {
 			drawMob(win, mob)
 		}
 
-		imd.Draw(win)
+		fps.Draw(win, pixel.IM)
+
 		win.Update()
 	}
 }
@@ -403,13 +422,13 @@ func posToFriction(px, py float64) float64 {
 	return float64(frictionMap[fx][fy])
 }
 
-func drawMap(win *pixelgl.Window) {
+func drawMap(c *pixelgl.Canvas) {
 	l := tmx.Layers[0]
 	for y := 0; y < tmx.Height; y++ {
 		for x := 0; x < tmx.Width; x++ {
 			lt := l.Tiles[y*tmx.Width+x]
 			// Note: scaling 1.001 is used her to prevent transparent artifacts between tiles at times.
-			terra.sprites[lt.ID].Draw(win, pixel.IM.Scaled(pixel.ZV, 1.001).Moved(tileVec(x, tmx.Height-y-1)))
+			terra.sprites[lt.ID].Draw(c, pixel.IM.Moved(tileVec(x, tmx.Height-y-1)))
 		}
 	}
 }

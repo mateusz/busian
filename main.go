@@ -108,10 +108,10 @@ func main() {
 	}
 
 	car.spriteset = &mobSprites
-	car.startID = 0
+	car.startID = 12
 
 	police.spriteset = &mobSprites
-	police.startID = 4
+	police.startID = 8
 
 	mobs = []*mobile{&car, &police}
 
@@ -144,8 +144,8 @@ func run() {
 
 	imd := imdraw.New(nil)
 
-	car.wp = pixel.Vec{10.0, 10.0}
-	police.wp = pixel.Vec{100.0, 100.0}
+	car.wp = pixel.Vec{100.0, 10.0}
+	police.wp = pixel.Vec{100.0, 30.0}
 	last := time.Now()
 	for !win.Closed() {
 		dt := time.Since(last).Seconds()

@@ -77,28 +77,81 @@ type player struct {
 }
 
 func (p *player) Steer(dt float64, w *pixelgl.Window) {
-	p.v = pixel.ZV
-	fr := posToFriction(p.wp.X, p.wp.Y-1)
-	if fr == -1 {
-		fr = 10
+	isBraking := false
+	if w.Pressed(p.c.Right) && p.v.X < 0.0 {
+		isBraking = true
 	}
-
-	dv := dt * 30 / fr
+	if w.Pressed(p.c.Left) && p.v.X > 0.0 {
+		isBraking = true
+	}
+	if w.Pressed(p.c.Up) && p.v.Y < 0.0 {
+		isBraking = true
+	}
+	if w.Pressed(p.c.Down) && p.v.Y > 0.0 {
+		isBraking = true
+	}
+	
+	// Read one of the 8 cardinal directions for acceleration.
+	d := pixel.Vec{X:0, Y:0}
+	isAccelerating := false
 	if w.Pressed(p.c.Right) {
-		p.v.X += dv
+		d = d.Add(pixel.Vec{X: 1.0})
+		isAccelerating = true
 	}
 	if w.Pressed(p.c.Left) {
-		p.v.X += -dv
+		d = d.Add(pixel.Vec{X: -1.0})
+		isAccelerating = true
 	}
 	if w.Pressed(p.c.Up) {
-		p.v.Y += dv
+		d = d.Add(pixel.Vec{Y: 1.0})
+		isAccelerating = true
 	}
 	if w.Pressed(p.c.Down) {
-		p.v.Y += -dv
+		d = d.Add(pixel.Vec{Y: -1.0})
+		isAccelerating = true
 	}
 
+	// Normalise direction to l=1.0
+	// Prevent direction change if braking
+	if isAccelerating && !isBraking {
+		d = d.Scaled(1.0/d.Len())
+	} else if p.v.Len()>0.0 {
+		d = p.v.Scaled(1.0/p.v.Len())
+	} // Otherwise no direction from velocity.
+
+	// Get current velocity
+	v := p.v.Len()
+
+	// Figure out velocity changes
+	if isBraking {
+		v -= dt * 60.0
+	} else if isAccelerating {
+		v += dt * 30.0
+	}
+
+	topSpeed := 60.0
+	frCoef := posToFriction(p.wp.X, p.wp.Y-1)
+	if frCoef == -1 {
+		frCoef = 10
+	}
+	maxSpeed := topSpeed / frCoef
+	fr := v - maxSpeed
+	if fr>0.0 {
+		v -= fr * dt * 10.0
+	}
+	v -= 10.0 * dt
+
+	if v<0.0 {
+		v = 0.0
+	}
+	if v>topSpeed {
+		v = topSpeed
+	}
+
+	p.v = d.Scaled(v)
+
 	// Apply velocity
-	p.wp = p.wp.Add(p.v)
+	p.wp = p.wp.Add(p.v.Scaled(dt))
 }
 
 type controls struct {
@@ -184,7 +237,7 @@ func run() {
 	monitor := pixelgl.PrimaryMonitor()
 
 	monW, monH := monitor.Size()
-	pixSize := 8.0
+	pixSize := 4.0
 
 	cfg := pixelgl.WindowConfig{
 		Title:   "Busian",

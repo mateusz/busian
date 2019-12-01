@@ -82,18 +82,19 @@ func (p *player) Steer(dt float64, w *pixelgl.Window) {
 	if fr == -1 {
 		fr = 10
 	}
-	mv := (dt * 25) / fr
+
+	dv := dt * 20 / fr
 	if w.Pressed(p.c.Right) {
-		p.v.X = mv
+		p.v.X += dv
 	}
 	if w.Pressed(p.c.Left) {
-		p.v.X = -mv
+		p.v.X += -dv
 	}
 	if w.Pressed(p.c.Up) {
-		p.v.Y = mv
+		p.v.Y += dv
 	}
 	if w.Pressed(p.c.Down) {
-		p.v.Y = -mv
+		p.v.Y += -dv
 	}
 
 	// Apply velocity
@@ -165,12 +166,12 @@ func main() {
 
 	p1.spriteset = &mobSprites
 	p1.startID = 12
-	p1.c = controls{Up:pixelgl.KeyUp, Down:pixelgl.KeyDown, Left:pixelgl.KeyLeft, Right:pixelgl.KeyRight}
+	p1.c = controls{Up:pixelgl.KeyW, Down:pixelgl.KeyS, Left:pixelgl.KeyA, Right:pixelgl.KeyD}
 	p1.wp = pixel.Vec{X: 100.0, Y: 10.0}
 
 	p2.spriteset = &mobSprites
 	p2.startID = 8
-	p2.c = controls{Up:pixelgl.KeyW, Down:pixelgl.KeyS, Left:pixelgl.KeyA, Right:pixelgl.KeyD}
+	p2.c = controls{Up:pixelgl.KeyUp, Down:pixelgl.KeyDown, Left:pixelgl.KeyLeft, Right:pixelgl.KeyRight}
 	p2.wp = pixel.Vec{X: 100.0, Y: 30.0}
 
 	steerables = []steerable{&p1, &p2}
@@ -206,14 +207,24 @@ func run() {
 	frictionMap := imdraw.New(nil)
 	drawFrictionMap(frictionMap)
 
+	// todo wet size to actual world
 	worldMap := pixelgl.NewCanvas(pixel.R(0, 0, monW, monH))
 	drawMap(worldMap)
 
-	hud := pixelgl.NewCanvas(pixel.R(0, 0, monW, monH))
-	last := time.Now()
+	p1view := pixelgl.NewCanvas(pixel.R(0,0,monW/2/pixSize, monH/pixSize))
+	p2view := pixelgl.NewCanvas(pixel.R(0,0,monW/2/pixSize, monH/pixSize))
 
+	hud := pixelgl.NewCanvas(pixel.R(0, 0, monW/pixSize, monH/pixSize))
+
+	staticHud := imdraw.New(nil)
+	staticHud.Color = colornames.Black
+	staticHud.Push(pixel.V(monW/2/pixSize, 0.0))
+	staticHud.Push(pixel.V(monW/2/pixSize, monH/pixSize))
+	staticHud.Line(1)
 	fps := text.New(pixel.ZV, text.NewAtlas(basicfont.Face7x13, text.ASCII))
 
+	last := time.Now()
+	fpsAvg := 60.0
 	for !win.Closed() {
 		if win.Pressed(pixelgl.KeyEscape) {
 			break
@@ -222,38 +233,69 @@ func run() {
 		dt := time.Since(last).Seconds()
 		last = time.Now()
 
-		// Move camera
-		cam := pixel.IM.Scaled(pixel.ZV, pixSize)
-		cam = cam.Moved(pixel.Vec{X: -p1.wp.X, Y: -p1.wp.Y}.Scaled(pixSize).Add(pixel.Vec{monW / 2.0, monH / 2.0}))
-		win.SetMatrix(cam)
-
-		fps.Clear()
-		fmt.Fprintf(fps, "%.0f", 1/dt)
-		fps.Draw(hud, pixel.IM)
+		fpsAvg -= fpsAvg/50.0
+		fpsAvg += 1.0/dt/50.0
 
 		p1.Steer(dt, win)
 		p2.Steer(dt, win)
 
-		// Draw
-		win.Clear(colornames.Green)
+		// Center views on players
+		cam1 := pixel.IM.Moved(pixel.Vec{
+			X: -p1.wp.X + p1view.Bounds().W()/2,
+			Y: -p1.wp.Y + p1view.Bounds().H()/2,
+		})
+		p1view.SetMatrix(cam1)
 
-		worldMap.Draw(win, pixel.IM.Moved(pixel.Vec{
+		cam2 := pixel.IM.Moved(pixel.Vec{
+			X: -p2.wp.X + p2view.Bounds().W()/2,
+			Y: -p2.wp.Y + p2view.Bounds().H()/2,
+		})
+		p2view.SetMatrix(cam2)
+
+		// Draw
+		win.Clear(colornames.Black)
+		hud.Clear(pixel.RGBA{})
+		p1view.Clear(colornames.Green)
+		p2view.Clear(colornames.Green)
+
+		worldMap.Draw(p1view, pixel.IM.Moved(pixel.Vec{
+			X:worldMap.Bounds().W()/2.0,
+			Y:worldMap.Bounds().H()/2.0,
+		}))
+		worldMap.Draw(p2view, pixel.IM.Moved(pixel.Vec{
 			X:worldMap.Bounds().W()/2.0,
 			Y:worldMap.Bounds().H()/2.0,
 		}))
 
-		if win.Pressed(pixelgl.KeyF) {
-			frictionMap.Draw(win)
+		if win.Pressed(pixelgl.KeyG) {
+			frictionMap.Draw(p1view)
+			frictionMap.Draw(p2view)
+			fps.Clear()
+			fmt.Fprintf(fps, "%.0f", fpsAvg)
+			fps.Draw(hud, pixel.IM)
 		}
 
 		sort.Slice(mobs, func(i, j int) bool {
 			return mobs[i].GetZ() > mobs[j].GetZ()
 		})
 		for _, mob := range mobs {
-			mob.Draw(win)
+			mob.Draw(p1view)
+			mob.Draw(p2view)
 		}
 
-		fps.Draw(win, pixel.IM)
+		// Draw  views onto respective halves of the screen
+		p1view.Draw(win, pixel.IM.Moved(pixel.Vec{
+			X:p1view.Bounds().W()/2,
+			Y:p1view.Bounds().H()/2,
+		}))
+		p2view.Draw(win, pixel.IM.Moved(pixel.Vec{
+			X:monW/2/pixSize+p2view.Bounds().W()/2,
+			Y:p2view.Bounds().H()/2,
+		}))
+
+		staticHud.Draw(hud)
+
+		hud.Draw(win, pixel.IM.Moved(pixel.V(hud.Bounds().W()/2, hud.Bounds().H()/2)))
 
 		win.Update()
 	}

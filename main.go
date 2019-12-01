@@ -83,7 +83,7 @@ func (p *player) Steer(dt float64, w *pixelgl.Window) {
 		fr = 10
 	}
 
-	dv := dt * 20 / fr
+	dv := dt * 30 / fr
 	if w.Pressed(p.c.Right) {
 		p.v.X += dv
 	}
@@ -184,9 +184,7 @@ func run() {
 	monitor := pixelgl.PrimaryMonitor()
 
 	monW, monH := monitor.Size()
-	pixH := monH / float64(tmx.Height*tmx.TileHeight)
-	pixW := monW / float64(tmx.Width*tmx.TileWidth)
-	pixSize := math.Floor(math.Min(pixH, pixW)) * 4
+	pixSize := 8.0
 
 	cfg := pixelgl.WindowConfig{
 		Title:   "Busian",
@@ -207,8 +205,7 @@ func run() {
 	frictionMap := imdraw.New(nil)
 	drawFrictionMap(frictionMap)
 
-	// todo wet size to actual world
-	worldMap := pixelgl.NewCanvas(pixel.R(0, 0, monW, monH))
+	worldMap := pixelgl.NewCanvas(pixel.R(0, 0, float64(tmx.Width * tmx.TileWidth), float64(tmx.Height * tmx.TileHeight)))
 	drawMap(worldMap)
 
 	p1view := pixelgl.NewCanvas(pixel.R(0,0,monW/2/pixSize, monH/pixSize))
@@ -483,7 +480,6 @@ func drawMap(c *pixelgl.Canvas) {
 	for y := 0; y < tmx.Height; y++ {
 		for x := 0; x < tmx.Width; x++ {
 			lt := l.Tiles[y*tmx.Width+x]
-			// Note: scaling 1.001 is used her to prevent transparent artifacts between tiles at times.
 			terra.sprites[lt.ID].Draw(c, pixel.IM.Moved(tileVec(x, tmx.Height-y-1)))
 		}
 	}

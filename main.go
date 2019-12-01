@@ -36,14 +36,24 @@ const (
 
 var (
 	terra       spriteset
-	mobs        []*mobile
-	car         mobile
-	police      mobile
+	mobs        []mobile
+	steerables []steerable
+	p1         player
+	p2      player
 	tmx         *tiled.Map
 	frictionMap [][]int
 )
 
-type mobile struct {
+type mobile interface {
+	Draw(pixel.Target)
+	GetZ() float64
+}
+
+type steerable interface {
+	Steer(float64, *pixelgl.Window)
+}
+
+type vehicle struct {
 	// World position
 	wp pixel.Vec
 	// Velocity
@@ -53,23 +63,67 @@ type mobile struct {
 	stickyDir uint32
 }
 
-func (m *mobile) dirToSpr(dx, dy float64) *pixel.Sprite {
+func (v *vehicle) Draw(t pixel.Target) {
+	v.dirToSpr(v.v.X, v.v.Y).Draw(t, pixel.IM.Moved(v.wp))
+}
+
+func (v *vehicle) GetZ() float64 {
+	return v.wp.Y
+}
+
+type player struct {
+	vehicle
+	c controls
+}
+
+func (p *player) Steer(dt float64, w *pixelgl.Window) {
+	p.v = pixel.ZV
+	fr := posToFriction(p.wp.X, p.wp.Y-1)
+	if fr == -1 {
+		fr = 10
+	}
+	mv := (dt * 25) / fr
+	if w.Pressed(p.c.Right) {
+		p.v.X = mv
+	}
+	if w.Pressed(p.c.Left) {
+		p.v.X = -mv
+	}
+	if w.Pressed(p.c.Up) {
+		p.v.Y = mv
+	}
+	if w.Pressed(p.c.Down) {
+		p.v.Y = -mv
+	}
+
+	// Apply velocity
+	p.wp = p.wp.Add(p.v)
+}
+
+type controls struct {
+	Up pixelgl.Button 
+	Down pixelgl.Button
+	Left pixelgl.Button
+	Right pixelgl.Button
+}
+
+func (v *vehicle) dirToSpr(dx, dy float64) *pixel.Sprite {
 	if dx > 0 {
-		m.stickyDir = sprDirRight
+		v.stickyDir = sprDirRight
 	}
 	if dx < 0 {
-		m.stickyDir = sprDirLeft
+		v.stickyDir = sprDirLeft
 	}
 	if dy > 0 {
-		m.stickyDir = sprDirUp
+		v.stickyDir = sprDirUp
 	}
 	if dy < 0 {
-		m.stickyDir = sprDirDown
+		v.stickyDir = sprDirDown
 	}
 	// ... and if 0,0, then use the old stickyDir so that the car doesn't randomly
 	// flip after stopping!
 
-	return m.spriteset.sprites[m.startID+m.stickyDir]
+	return v.spriteset.sprites[v.startID+v.stickyDir]
 }
 
 type spriteset struct {
@@ -109,13 +163,18 @@ func main() {
 		os.Exit(2)
 	}
 
-	car.spriteset = &mobSprites
-	car.startID = 12
+	p1.spriteset = &mobSprites
+	p1.startID = 12
+	p1.c = controls{Up:pixelgl.KeyUp, Down:pixelgl.KeyDown, Left:pixelgl.KeyLeft, Right:pixelgl.KeyRight}
+	p1.wp = pixel.Vec{X: 100.0, Y: 10.0}
 
-	police.spriteset = &mobSprites
-	police.startID = 8
+	p2.spriteset = &mobSprites
+	p2.startID = 8
+	p2.c = controls{Up:pixelgl.KeyW, Down:pixelgl.KeyS, Left:pixelgl.KeyA, Right:pixelgl.KeyD}
+	p2.wp = pixel.Vec{X: 100.0, Y: 30.0}
 
-	mobs = []*mobile{&car, &police}
+	steerables = []steerable{&p1, &p2}
+	mobs = []mobile{&p1, &p2}
 
 	pixelgl.Run(run)
 }
@@ -140,7 +199,7 @@ func run() {
 		panic(err)
 	}
 
-	// Zoom in to get nic pixels
+	// Zoom in to get nice pixels
 	win.SetSmooth(false)
 	win.SetMatrix(pixel.IM.Scaled(pixel.ZV, pixSize))
 
@@ -151,9 +210,6 @@ func run() {
 	drawMap(worldMap)
 
 	hud := pixelgl.NewCanvas(pixel.R(0, 0, monW, monH))
-
-	car.wp = pixel.Vec{X: 100.0, Y: 10.0}
-	police.wp = pixel.Vec{X: 100.0, Y: 30.0}
 	last := time.Now()
 
 	fps := text.New(pixel.ZV, text.NewAtlas(basicfont.Face7x13, text.ASCII))
@@ -168,57 +224,15 @@ func run() {
 
 		// Move camera
 		cam := pixel.IM.Scaled(pixel.ZV, pixSize)
-		cam = cam.Moved(pixel.Vec{X: -police.wp.X, Y: -police.wp.Y}.Scaled(pixSize).Add(pixel.Vec{monW / 2.0, monH / 2.0}))
+		cam = cam.Moved(pixel.Vec{X: -p1.wp.X, Y: -p1.wp.Y}.Scaled(pixSize).Add(pixel.Vec{monW / 2.0, monH / 2.0}))
 		win.SetMatrix(cam)
 
 		fps.Clear()
 		fmt.Fprintf(fps, "%.0f", 1/dt)
 		fps.Draw(hud, pixel.IM)
 
-		var mv float64
-		// Steer police
-		police.v = pixel.ZV
-		fr := posToFriction(police.wp.X, police.wp.Y-1)
-		if fr == -1 {
-			fr = 10
-		}
-		mv = (dt * 25) / fr
-		if win.Pressed(pixelgl.KeyRight) {
-			police.v.X = mv
-		}
-		if win.Pressed(pixelgl.KeyLeft) {
-			police.v.X = -mv
-		}
-		if win.Pressed(pixelgl.KeyUp) {
-			police.v.Y = mv
-		}
-		if win.Pressed(pixelgl.KeyDown) {
-			police.v.Y = -mv
-		}
-
-		// Steer car
-		car.v = pixel.ZV
-		fr = posToFriction(car.wp.X, car.wp.Y-1)
-		if fr == -1 {
-			fr = 10
-		}
-		mv = (dt * 25) / fr
-		if win.Pressed(pixelgl.KeyD) {
-			car.v.X = mv
-		}
-		if win.Pressed(pixelgl.KeyA) {
-			car.v.X = -mv
-		}
-		if win.Pressed(pixelgl.KeyW) {
-			car.v.Y = mv
-		}
-		if win.Pressed(pixelgl.KeyS) {
-			car.v.Y = -mv
-		}
-
-		// Apply velocity
-		car.wp = car.wp.Add(car.v)
-		police.wp = police.wp.Add(police.v)
+		p1.Steer(dt, win)
+		p2.Steer(dt, win)
 
 		// Draw
 		win.Clear(colornames.Green)
@@ -233,10 +247,10 @@ func run() {
 		}
 
 		sort.Slice(mobs, func(i, j int) bool {
-			return mobs[i].wp.Y > mobs[j].wp.Y
+			return mobs[i].GetZ() > mobs[j].GetZ()
 		})
 		for _, mob := range mobs {
-			drawMob(win, mob)
+			mob.Draw(win)
 		}
 
 		fps.Draw(win, pixel.IM)
@@ -433,10 +447,6 @@ func drawMap(c *pixelgl.Canvas) {
 	}
 }
 
-func drawMob(win *pixelgl.Window, m *mobile) {
-	m.dirToSpr(m.v.X, m.v.Y).Draw(win, pixel.IM.Moved(m.wp))
-}
-
 // Debug helper
 func drawFrictionMap(imd *imdraw.IMDraw) {
 	for y := 0; y < tmx.Height*frictionMapRes; y++ {
@@ -452,12 +462,4 @@ func drawFrictionMap(imd *imdraw.IMDraw) {
 			imd.Rectangle(0)
 		}
 	}
-}
-
-// Debug helper
-func drawCarPos(imd *imdraw.IMDraw, m *mobile) {
-	imd.Color = colornames.White
-	imd.Push(pixel.V(m.wp.X-1, m.wp.Y-1-1))
-	imd.Push(pixel.V(m.wp.X+1, m.wp.Y+1-1))
-	imd.Rectangle(0)
 }

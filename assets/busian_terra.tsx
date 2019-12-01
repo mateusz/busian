@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<tileset version="1.2" tiledversion="1.3.0" name="busian_terra" tilewidth="16" tileheight="16" tilecount="21" columns="0">
+<tileset version="1.2" tiledversion="1.3.0" name="busian_terra" tilewidth="16" tileheight="16" tilecount="31" columns="0">
  <grid orientation="orthogonal" width="1" height="1"/>
  <tile id="4">
   <properties>
@@ -126,5 +126,65 @@
    <property name="friction" value="3,3,3,3,1,1,1,1,1,1,1,1,3,3,3,3"/>
   </properties>
   <image width="16" height="16" source="rd_end2.png"/>
+ </tile>
+ <tile id="27">
+  <properties>
+   <property name="friction" value="3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3"/>
+  </properties>
+  <image width="16" height="16" source="signal1.png"/>
+ </tile>
+ <tile id="28">
+  <properties>
+   <property name="friction" value="3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3"/>
+  </properties>
+  <image width="16" height="16" source="stream1.png"/>
+ </tile>
+ <tile id="29">
+  <properties>
+   <property name="friction" value="3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3"/>
+  </properties>
+  <image width="16" height="16" source="stream2.png"/>
+ </tile>
+ <tile id="30">
+  <properties>
+   <property name="friction" value="3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3"/>
+  </properties>
+  <image width="16" height="16" source="stream3.png"/>
+ </tile>
+ <tile id="31">
+  <properties>
+   <property name="friction" value="3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3"/>
+  </properties>
+  <image width="16" height="16" source="stream4.png"/>
+ </tile>
+ <tile id="32">
+  <properties>
+   <property name="friction" value="3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3"/>
+  </properties>
+  <image width="16" height="16" source="stream5.png"/>
+ </tile>
+ <tile id="33">
+  <properties>
+   <property name="friction" value="3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3"/>
+  </properties>
+  <image width="16" height="16" source="stream6.png"/>
+ </tile>
+ <tile id="34">
+  <properties>
+   <property name="friction" value="3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3"/>
+  </properties>
+  <image width="16" height="16" source="bridge1.png"/>
+ </tile>
+ <tile id="35">
+  <properties>
+   <property name="friction" value="3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3"/>
+  </properties>
+  <image width="16" height="16" source="bridge2.png"/>
+ </tile>
+ <tile id="36">
+  <properties>
+   <property name="friction" value="3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3"/>
+  </properties>
+  <image width="16" height="16" source="bridge3.png"/>
  </tile>
 </tileset>

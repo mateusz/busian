@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"container/list"
 
 	_ "image/png"
 
@@ -46,6 +47,7 @@ var (
 )
 
 type mobile interface {
+	Update(dt float64)
 	Draw(pixel.Target)
 	GetZ() float64
 }
@@ -72,9 +74,19 @@ func (v *vehicle) GetZ() float64 {
 	return v.wp.Y
 }
 
+func (v *vehicle) Update(dt float64) {
+	v.wp = v.wp.Add(v.v.Scaled(dt))
+}
+
 type player struct {
 	vehicle
 	c controls
+	trailers *list.List
+	wpHistory *list.List
+}
+
+func (p *player) AddTrailer(m mobile) {
+	p.trailers.PushBack(m)
 }
 
 func (p *player) Steer(dt float64, w *pixelgl.Window) {
@@ -151,8 +163,10 @@ func (p *player) Steer(dt float64, w *pixelgl.Window) {
 
 	p.v = d.Scaled(v)
 
-	// Apply velocity
-	p.wp = p.wp.Add(p.v.Scaled(dt))
+	for e := p.trailers.Front(); e != nil; e = e.Next() {
+		trailer := e.Value.(*vehicle)
+		trailer.v = p.v
+	}
 }
 
 type controls struct {
@@ -224,18 +238,47 @@ func main() {
 		os.Exit(2)
 	}
 
+	p1.wpHistory = list.New()
+	p1.trailers = list.New()
 	p1.spriteset = &mobSprites
-	p1.startID = 12
+	p1.startID = 16
 	p1.c = controls{Up:pixelgl.KeyW, Down:pixelgl.KeyS, Left:pixelgl.KeyA, Right:pixelgl.KeyD}
 	p1.wp = pixel.Vec{X: 100.0, Y: 10.0}
 
+	p2.wpHistory = list.New()
+	p2.trailers = list.New()
 	p2.spriteset = &mobSprites
 	p2.startID = 8
 	p2.c = controls{Up:pixelgl.KeyUp, Down:pixelgl.KeyDown, Left:pixelgl.KeyLeft, Right:pixelgl.KeyRight}
 	p2.wp = pixel.Vec{X: 100.0, Y: 30.0}
 
+	t1 := vehicle{
+		wp: pixel.Vec{X: 84.0, Y: 10.0},
+		spriteset: p1.spriteset,
+		startID: 20,
+	}
+	p1.AddTrailer(&t1)
+	t2 := vehicle{
+		wp: pixel.Vec{X: 68.0, Y: 10.0},
+		spriteset: p1.spriteset,
+		startID: 20,
+	}
+	p1.AddTrailer(&t2)
+	t3 := vehicle{
+		wp: pixel.Vec{X: 68.0-16.0, Y: 10.0},
+		spriteset: p1.spriteset,
+		startID: 20,
+	}
+	p1.AddTrailer(&t3)
+	t4 := vehicle{
+		wp: pixel.Vec{X: 68.0-16.0-16.0, Y: 10.0},
+		spriteset: p1.spriteset,
+		startID: 20,
+	}
+	p1.AddTrailer(&t4)
+
 	steerables = []steerable{&p1, &p2}
-	mobs = []mobile{&p1, &p2}
+	mobs = []mobile{&p1, &p2, &t1, &t2, &t3, &t4}
 
 	pixelgl.Run(run)
 }
@@ -293,8 +336,9 @@ func run() {
 		fpsAvg -= fpsAvg/50.0
 		fpsAvg += 1.0/dt/50.0
 
-		p1.Steer(dt, win)
-		p2.Steer(dt, win)
+		for _, s := range steerables {
+			s.Steer(dt, win)
+		}
 
 		// Center views on players
 		cam1 := pixel.IM.Moved(pixel.Vec{
@@ -336,6 +380,7 @@ func run() {
 			return mobs[i].GetZ() > mobs[j].GetZ()
 		})
 		for _, mob := range mobs {
+			mob.Update(dt)
 			mob.Draw(p1view)
 			mob.Draw(p2view)
 		}

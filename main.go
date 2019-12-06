@@ -35,6 +35,7 @@ const (
 )
 
 var (
+	workDir		string
 	terra       spriteset
 	mobs        []mobile
 	steerables []steerable
@@ -194,7 +195,13 @@ func newSpriteset() spriteset {
 
 func main() {
 	var err error
-	tmx, err = tiled.LoadFromFile("assets/map4.tmx")
+    workDir, err := filepath.Abs(filepath.Dir(os.Args[0]))
+    if err != nil {
+		fmt.Printf("Error checking working dir: %s\n", err)
+		os.Exit(2)
+    }
+
+	tmx, err = tiled.LoadFromFile(fmt.Sprintf("%s/assets/map4.tmx", workDir))
 	if err != nil {
 		fmt.Printf("Error parsing map: %s\n", err)
 		os.Exit(2)
@@ -211,7 +218,7 @@ func main() {
 		os.Exit(2)
 	}
 
-	mobSprites, err := newSpritesetFromTsx("assets", "busian_mobs.tsx")
+	mobSprites, err := newSpritesetFromTsx(fmt.Sprintf("%s/assets", workDir), "busian_mobs.tsx")
 	if err != nil {
 		fmt.Printf("Error loading mobs: %s\n", err)
 		os.Exit(2)

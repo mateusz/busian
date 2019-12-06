@@ -242,14 +242,14 @@ func main() {
 	p1.trailers = list.New()
 	p1.spriteset = &mobSprites
 	p1.startID = 16
-	p1.c = controls{Up:pixelgl.KeyW, Down:pixelgl.KeyS, Left:pixelgl.KeyA, Right:pixelgl.KeyD}
+	p1.c = controls{Up:pixelgl.KeyUp, Down:pixelgl.KeyDown, Left:pixelgl.KeyLeft, Right:pixelgl.KeyRight}
 	p1.wp = pixel.Vec{X: 100.0, Y: 10.0}
 
 	p2.wpHistory = list.New()
 	p2.trailers = list.New()
 	p2.spriteset = &mobSprites
 	p2.startID = 8
-	p2.c = controls{Up:pixelgl.KeyUp, Down:pixelgl.KeyDown, Left:pixelgl.KeyLeft, Right:pixelgl.KeyRight}
+	p2.c = controls{Up:pixelgl.KeyW, Down:pixelgl.KeyS, Left:pixelgl.KeyA, Right:pixelgl.KeyD}
 	p2.wp = pixel.Vec{X: 100.0, Y: 30.0}
 
 	t1 := vehicle{

@@ -156,9 +156,9 @@ func (p *player) Steer(dt float64, w *pixelgl.Window) {
 	maxSpeed := topSpeed / frCoef
 	fr := v - maxSpeed
 	if fr>0.0 {
-		v -= fr * dt * 10.0
+		v -= fr * dt * (topSpeed/6.0)
 	}
-	v -= 10.0 * dt
+	v -= (topSpeed/6.0) * dt
 
 	if v<0.0 {
 		v = 0.0
@@ -176,7 +176,7 @@ func (p *player) Steer(dt float64, w *pixelgl.Window) {
 
 	trailerDelay := 0.0
 	prevTrailerPos := p.wp
-	//prevTrailerV := p.v
+	prevTrailerV := p.v
 	for et := p.trailers.Front(); et != nil; et = et.Next() {
 		// Each trailer is delayed by the sprite size.
 		trailerDelay += 16.0
@@ -196,7 +196,7 @@ func (p *player) Steer(dt float64, w *pixelgl.Window) {
 			break
 		}
 
-		// Look forward.
+		// Look forward through the list enough to construct the new movement
 		totalV := pixel.Vec{}
 		endDelay := 0.0
 		for step := start; step != nil; step = step.Prev() {
@@ -212,9 +212,15 @@ func (p *player) Steer(dt float64, w *pixelgl.Window) {
 			totalV = totalV.Add(vh)
 		}
 
+		// Compute a fix if falling out of line
 		trailer := et.Value.(*vehicle)
 		trailerDisplacement := trailer.wp.Sub(prevTrailerPos)
-		if trailerDisplacement.Len()>18.0 {
+		if trailerDisplacement.Len()>=16.2 && prevTrailerV.Len()>0.0 {
+			// Weird fixing algorightm - trailers skip around.
+			direction := prevTrailerV.Scaled(1.0/prevTrailerV.Len())
+			trailer.wp = prevTrailerPos.Sub(direction.Scaled(16.0))
+		} else if trailerDisplacement.Len()>16.0 {
+			// Soft fixing.
 			remainder := (trailerDisplacement.Len()-16.0)
 			scaleDisp := remainder / trailerDisplacement.Len()
 			fix := trailerDisplacement.Scaled(scaleDisp)
@@ -224,7 +230,7 @@ func (p *player) Steer(dt float64, w *pixelgl.Window) {
 		trailer.v = totalV
 
 		prevTrailerPos = trailer.wp
-		//prevTrailerV = trailer.v
+		prevTrailerV = trailer.v
 	}
 
 }
@@ -315,29 +321,6 @@ func main() {
 	steerables = []steerable{&p1, &p2}
 	mobs = []mobile{&p1, &p2}
 	trailers = list.New()
-
-	/*
-	for i := 0; i<20; i++ {
-		t := vehicle{
-			wp: p1.wp,
-			spriteset: p1.spriteset,
-			startID: 20,
-			colorMask: p1.colorMask,
-		}
-		p1.AddTrailer(&t)
-		mobs = append(mobs, &t)
-	}
-	for i := 0; i<20; i++ {
-		t := vehicle{
-			wp: p2.wp,
-			spriteset: p2.spriteset,
-			startID: 20,
-			colorMask: p2.colorMask,
-		}
-		p2.AddTrailer(&t)
-		mobs = append(mobs, &t)
-	}
-	*/
 
 	pixelgl.Run(run)
 }

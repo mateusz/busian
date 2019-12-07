@@ -116,16 +116,14 @@ func (p *player) Steer(dt float64, w *pixelgl.Window) {
 	if w.Pressed(p.c.Right) {
 		d = d.Add(pixel.Vec{X: 1.0})
 		isAccelerating = true
-	}
-	if w.Pressed(p.c.Left) {
+	} else if w.Pressed(p.c.Left) {
 		d = d.Add(pixel.Vec{X: -1.0})
 		isAccelerating = true
 	}
 	if w.Pressed(p.c.Up) {
 		d = d.Add(pixel.Vec{Y: 1.0})
 		isAccelerating = true
-	}
-	if w.Pressed(p.c.Down) {
+	} else if w.Pressed(p.c.Down) {
 		d = d.Add(pixel.Vec{Y: -1.0})
 		isAccelerating = true
 	}
@@ -174,12 +172,13 @@ func (p *player) Steer(dt float64, w *pixelgl.Window) {
 		p.vHistory.Remove(p.vHistory.Back())
 	}
 
+	gap := 14.0
 	trailerDelay := 0.0
 	prevTrailerPos := p.wp
 	prevTrailerV := p.v
 	for et := p.trailers.Front(); et != nil; et = et.Next() {
 		// Each trailer is delayed by the sprite size.
-		trailerDelay += 16.0
+		trailerDelay += gap
 		startDelay := 0.0
 		var start *list.Element
 		for start = p.vHistory.Front(); start != nil; start = start.Next() {
@@ -215,13 +214,13 @@ func (p *player) Steer(dt float64, w *pixelgl.Window) {
 		// Compute a fix if falling out of line
 		trailer := et.Value.(*vehicle)
 		trailerDisplacement := trailer.wp.Sub(prevTrailerPos)
-		if trailerDisplacement.Len()>=16.2 && prevTrailerV.Len()>0.0 {
-			// Weird fixing algorightm - trailers skip around.
+		if trailerDisplacement.Len()>=gap+0.5 && prevTrailerV.Len()>0.0 {
+			// Totally out of whack, try fixing more permanently.
 			direction := prevTrailerV.Scaled(1.0/prevTrailerV.Len())
-			trailer.wp = prevTrailerPos.Sub(direction.Scaled(16.0))
-		} else if trailerDisplacement.Len()>16.0 {
+			trailer.wp = prevTrailerPos.Sub(direction.Scaled(gap))
+		} else if trailerDisplacement.Len()>gap {
 			// Soft fixing.
-			remainder := (trailerDisplacement.Len()-16.0)
+			remainder := (trailerDisplacement.Len()-gap)
 			scaleDisp := remainder / trailerDisplacement.Len()
 			fix := trailerDisplacement.Scaled(scaleDisp)
 			trailer.wp = trailer.wp.Sub(fix)
@@ -274,6 +273,8 @@ func newSpriteset() spriteset {
 }
 
 func main() {
+	rand.Seed(time.Now().UnixNano())
+
 	var err error
     workDir, err := filepath.Abs(filepath.Dir(os.Args[0]))
     if err != nil {
@@ -373,6 +374,8 @@ func run() {
 	staticHud.Push(pixel.V(monW/2/pixSize, monH/pixSize))
 	staticHud.Line(1)
 	fps := text.New(pixel.ZV, text.NewAtlas(basicfont.Face7x13, text.ASCII))
+	score1 := text.New(pixel.ZV, text.NewAtlas(basicfont.Face7x13, text.ASCII))
+	score2 := text.New(pixel.ZV, text.NewAtlas(basicfont.Face7x13, text.ASCII))
 
 	last := time.Now()
 	fpsAvg := 60.0
@@ -430,6 +433,20 @@ func run() {
 			fmt.Fprintf(fps, "%.0f", fpsAvg)
 			fps.Draw(hud, pixel.IM)
 		}
+
+		score1.Clear()
+		fmt.Fprintf(score1, "%d", p1.trailers.Len())
+		score1.Draw(hud, pixel.IM.Moved(pixel.Vec{
+			X: 5.0,
+			Y: p1view.Bounds().H() - 15.0,
+		}))
+
+		score2.Clear()
+		fmt.Fprintf(score2, "%d", p2.trailers.Len())
+		score2.Draw(hud, pixel.IM.Moved(pixel.Vec{
+			X: p2view.Bounds().W() + 5.0,
+			Y: p2view.Bounds().H() - 15.0,
+		}))
 
 		sort.Slice(mobs, func(i, j int) bool {
 			return mobs[i].GetZ() > mobs[j].GetZ()
@@ -679,6 +696,8 @@ func drawFrictionMap(imd *imdraw.IMDraw) {
 		for x := 0; x < tmx.Width*frictionMapRes; x++ {
 
 			if frictionMap[x][y] == 1 {
+				imd.Color = pixel.RGBA{G: 255, A: 0.2}
+			} else if frictionMap[x][y] < 5 {
 				imd.Color = pixel.RGBA{B: 255, A: 0.2}
 			} else {
 				imd.Color = pixel.RGBA{R: 255, A: 0.2}

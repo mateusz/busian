@@ -14,6 +14,8 @@ import (
 	"strings"
 	"time"
 	"container/list"
+	"image/color"
+	"math/rand"
 
 	_ "image/png"
 
@@ -38,12 +40,14 @@ const (
 var (
 	workDir		string
 	terra       spriteset
+	mobSprites	spriteset
 	mobs        []mobile
 	steerables []steerable
 	p1         player
 	p2      player
 	tmx         *tiled.Map
 	frictionMap [][]int
+	trailers *list.List
 )
 
 type mobile interface {
@@ -64,10 +68,11 @@ type vehicle struct {
 	spriteset *spriteset
 	startID   uint32
 	stickyDir uint32
+	colorMask color.RGBA
 }
 
 func (v *vehicle) Draw(t pixel.Target) {
-	v.dirToSpr(v.v.X, v.v.Y).Draw(t, pixel.IM.Moved(v.wp))
+	v.dirToSpr(v.v.X, v.v.Y).DrawColorMask(t, pixel.IM.Moved(v.wp), v.colorMask)
 }
 
 func (v *vehicle) GetZ() float64 {
@@ -85,8 +90,9 @@ type player struct {
 	vHistory *list.List
 }
 
-func (p *player) AddTrailer(m mobile) {
-	p.trailers.PushBack(m)
+func (p *player) AddTrailer(v *vehicle) {
+	p.trailers.PushBack(v)
+	v.colorMask = p.colorMask
 }
 
 func (p *player) Steer(dt float64, w *pixelgl.Window) {
@@ -170,6 +176,7 @@ func (p *player) Steer(dt float64, w *pixelgl.Window) {
 
 	trailerDelay := 0.0
 	prevTrailerPos := p.wp
+	//prevTrailerV := p.v
 	for et := p.trailers.Front(); et != nil; et = et.Next() {
 		// Each trailer is delayed by the sprite size.
 		trailerDelay += 16.0
@@ -217,6 +224,7 @@ func (p *player) Steer(dt float64, w *pixelgl.Window) {
 		trailer.v = totalV
 
 		prevTrailerPos = trailer.wp
+		//prevTrailerV = trailer.v
 	}
 
 }
@@ -284,7 +292,7 @@ func main() {
 		os.Exit(2)
 	}
 
-	mobSprites, err := newSpritesetFromTsx(fmt.Sprintf("%s/assets", workDir), "busian_mobs.tsx")
+	mobSprites, err = newSpritesetFromTsx(fmt.Sprintf("%s/assets", workDir), "busian_mobs.tsx")
 	if err != nil {
 		fmt.Printf("Error loading mobs: %s\n", err)
 		os.Exit(2)
@@ -295,23 +303,26 @@ func main() {
 	p1.spriteset = &mobSprites
 	p1.startID = 16
 	p1.c = controls{Up:pixelgl.KeyW, Down:pixelgl.KeyS, Left:pixelgl.KeyA, Right:pixelgl.KeyD}
-	p1.wp = pixel.Vec{X: 300.0, Y: 280.0}
+ 	p1.colorMask = color.RGBA{255,100,100,255}
 
 	p2.vHistory = list.New()
 	p2.trailers = list.New()
 	p2.spriteset = &mobSprites
 	p2.startID = 16
 	p2.c = controls{Up:pixelgl.KeyUp, Down:pixelgl.KeyDown, Left:pixelgl.KeyLeft, Right:pixelgl.KeyRight}
-	p2.wp = pixel.Vec{X: 300.0, Y: 300.0}
+	p2.colorMask = color.RGBA{100,255,100,255}
 
 	steerables = []steerable{&p1, &p2}
 	mobs = []mobile{&p1, &p2}
+	trailers = list.New()
 
+	/*
 	for i := 0; i<20; i++ {
 		t := vehicle{
 			wp: p1.wp,
 			spriteset: p1.spriteset,
-			startID: 12,
+			startID: 20,
+			colorMask: p1.colorMask,
 		}
 		p1.AddTrailer(&t)
 		mobs = append(mobs, &t)
@@ -320,11 +331,13 @@ func main() {
 		t := vehicle{
 			wp: p2.wp,
 			spriteset: p2.spriteset,
-			startID: 24,
+			startID: 20,
+			colorMask: p2.colorMask,
 		}
 		p2.AddTrailer(&t)
 		mobs = append(mobs, &t)
 	}
+	*/
 
 	pixelgl.Run(run)
 }
@@ -357,6 +370,15 @@ func run() {
 	worldMap := pixelgl.NewCanvas(pixel.R(0, 0, float64(tmx.Width * tmx.TileWidth), float64(tmx.Height * tmx.TileHeight)))
 	drawMap(worldMap)
 
+	p1.wp = pixel.Vec{
+		X: float64(tmx.Width * tmx.TileWidth)/2.0,
+		Y: float64(tmx.Height * tmx.TileHeight)/2.0,
+	}
+	p2.wp = pixel.Vec{
+		X: float64(tmx.Width * tmx.TileWidth)/2.0+32.0,
+		Y: float64(tmx.Height * tmx.TileHeight)/2.0,
+	}
+
 	p1view := pixelgl.NewCanvas(pixel.R(0,0,monW/2/pixSize, monH/pixSize))
 	p2view := pixelgl.NewCanvas(pixel.R(0,0,monW/2/pixSize, monH/pixSize))
 
@@ -381,6 +403,10 @@ func run() {
 
 		fpsAvg -= fpsAvg/50.0
 		fpsAvg += 1.0/dt/50.0
+
+		ensureTrailers()
+		collectTrailers(&p1)
+		collectTrailers(&p2)
 
 		for _, s := range steerables {
 			s.Steer(dt, win)
@@ -446,6 +472,34 @@ func run() {
 		hud.Draw(win, pixel.IM.Moved(pixel.V(hud.Bounds().W()/2, hud.Bounds().H()/2)))
 
 		win.Update()
+	}
+}
+
+func ensureTrailers() {
+	missing := 100-trailers.Len()
+	for i:=0; i<missing; i++ {
+		wp := pixel.Vec{
+			X: float64(rand.Intn(tmx.Width * tmx.TileWidth)),
+			Y: float64(rand.Intn(tmx.Height * tmx.TileHeight)),
+		}
+		t := vehicle{
+			wp: wp,
+			spriteset: &mobSprites,
+			startID: 20,
+			colorMask: colornames.White,
+		}
+		trailers.PushBack(&t)
+		mobs = append(mobs, &t)
+	}
+}
+
+func collectTrailers(p *player) {
+	for t := trailers.Front(); t != nil; t = t.Next() {
+		v := t.Value.(*vehicle)
+		if math.Abs(v.wp.X-p.wp.X) < 16.0 && math.Abs(v.wp.Y-p.wp.Y) < 16.0 {
+			trailers.Remove(t)
+			p.AddTrailer(v)
+		}
 	}
 }
 

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<tileset version="1.2" tiledversion="1.3.1" name="busian_mobs" tilewidth="16" tileheight="16" tilecount="24" columns="0">
+<tileset version="1.2" tiledversion="1.2.1" name="busian_mobs" tilewidth="16" tileheight="16" tilecount="28" columns="0">
  <grid orientation="orthogonal" width="1" height="1"/>
  <tile id="0">
   <image width="16" height="16" source="car1.png"/>
@@ -72,5 +72,17 @@
  </tile>
  <tile id="23">
   <image width="16" height="16" source="trailer2.png"/>
+ </tile>
+ <tile id="24">
+  <image width="16" height="16" source="amb1.png"/>
+ </tile>
+ <tile id="25">
+  <image width="16" height="16" source="amb4.png"/>
+ </tile>
+ <tile id="26">
+  <image width="16" height="16" source="amb3.png"/>
+ </tile>
+ <tile id="27">
+  <image width="16" height="16" source="amb2.png"/>
  </tile>
 </tileset>

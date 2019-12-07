@@ -82,7 +82,7 @@ type player struct {
 	vehicle
 	c controls
 	trailers *list.List
-	wpHistory *list.List
+	vHistory *list.List
 }
 
 func (p *player) AddTrailer(m mobile) {
@@ -163,10 +163,62 @@ func (p *player) Steer(dt float64, w *pixelgl.Window) {
 
 	p.v = d.Scaled(v)
 
-	for e := p.trailers.Front(); e != nil; e = e.Next() {
-		trailer := e.Value.(*vehicle)
-		trailer.v = p.v
+	p.vHistory.PushFront(p.v)
+	for i := p.vHistory.Len(); i>2000; i-- {
+		p.vHistory.Remove(p.vHistory.Back())
 	}
+
+	trailerDelay := 0.0
+	prevTrailerPos := p.wp
+	for et := p.trailers.Front(); et != nil; et = et.Next() {
+		// Each trailer is delayed by the sprite size.
+		trailerDelay += 16.0
+		startDelay := 0.0
+		var start *list.Element
+		for start = p.vHistory.Front(); start != nil; start = start.Next() {
+			vh := start.Value.(pixel.Vec)
+			startDelay += vh.Len()
+			if startDelay > trailerDelay * 64.0 {
+				// We found the right spot, looking back.
+				break
+			}
+		}
+
+		if start==nil {
+			// Not enough history
+			break
+		}
+
+		// Look forward.
+		totalV := pixel.Vec{}
+		endDelay := 0.0
+		for step := start; step != nil; step = step.Prev() {
+			vh := step.Value.(pixel.Vec)
+
+			if endDelay+vh.Len()>p.v.Len() {
+				// Moved too far.
+				remainder := p.v.Len()-endDelay
+				totalV = totalV.Add(vh.Scaled(remainder/vh.Len()))
+				break
+			}
+			endDelay += vh.Len()
+			totalV = totalV.Add(vh)
+		}
+
+		trailer := et.Value.(*vehicle)
+		trailerDisplacement := trailer.wp.Sub(prevTrailerPos)
+		if trailerDisplacement.Len()>18.0 {
+			remainder := (trailerDisplacement.Len()-16.0)
+			scaleDisp := remainder / trailerDisplacement.Len()
+			fix := trailerDisplacement.Scaled(scaleDisp)
+			trailer.wp = trailer.wp.Sub(fix)
+		}
+
+		trailer.v = totalV
+
+		prevTrailerPos = trailer.wp
+	}
+
 }
 
 type controls struct {
@@ -238,47 +290,41 @@ func main() {
 		os.Exit(2)
 	}
 
-	p1.wpHistory = list.New()
+	p1.vHistory = list.New()
 	p1.trailers = list.New()
 	p1.spriteset = &mobSprites
 	p1.startID = 16
-	p1.c = controls{Up:pixelgl.KeyUp, Down:pixelgl.KeyDown, Left:pixelgl.KeyLeft, Right:pixelgl.KeyRight}
-	p1.wp = pixel.Vec{X: 100.0, Y: 10.0}
+	p1.c = controls{Up:pixelgl.KeyW, Down:pixelgl.KeyS, Left:pixelgl.KeyA, Right:pixelgl.KeyD}
+	p1.wp = pixel.Vec{X: 300.0, Y: 280.0}
 
-	p2.wpHistory = list.New()
+	p2.vHistory = list.New()
 	p2.trailers = list.New()
 	p2.spriteset = &mobSprites
-	p2.startID = 8
-	p2.c = controls{Up:pixelgl.KeyW, Down:pixelgl.KeyS, Left:pixelgl.KeyA, Right:pixelgl.KeyD}
-	p2.wp = pixel.Vec{X: 100.0, Y: 30.0}
-
-	t1 := vehicle{
-		wp: pixel.Vec{X: 84.0, Y: 10.0},
-		spriteset: p1.spriteset,
-		startID: 20,
-	}
-	p1.AddTrailer(&t1)
-	t2 := vehicle{
-		wp: pixel.Vec{X: 68.0, Y: 10.0},
-		spriteset: p1.spriteset,
-		startID: 20,
-	}
-	p1.AddTrailer(&t2)
-	t3 := vehicle{
-		wp: pixel.Vec{X: 68.0-16.0, Y: 10.0},
-		spriteset: p1.spriteset,
-		startID: 20,
-	}
-	p1.AddTrailer(&t3)
-	t4 := vehicle{
-		wp: pixel.Vec{X: 68.0-16.0-16.0, Y: 10.0},
-		spriteset: p1.spriteset,
-		startID: 20,
-	}
-	p1.AddTrailer(&t4)
+	p2.startID = 16
+	p2.c = controls{Up:pixelgl.KeyUp, Down:pixelgl.KeyDown, Left:pixelgl.KeyLeft, Right:pixelgl.KeyRight}
+	p2.wp = pixel.Vec{X: 300.0, Y: 300.0}
 
 	steerables = []steerable{&p1, &p2}
-	mobs = []mobile{&p1, &p2, &t1, &t2, &t3, &t4}
+	mobs = []mobile{&p1, &p2}
+
+	for i := 0; i<20; i++ {
+		t := vehicle{
+			wp: p1.wp,
+			spriteset: p1.spriteset,
+			startID: 12,
+		}
+		p1.AddTrailer(&t)
+		mobs = append(mobs, &t)
+	}
+	for i := 0; i<20; i++ {
+		t := vehicle{
+			wp: p2.wp,
+			spriteset: p2.spriteset,
+			startID: 24,
+		}
+		p2.AddTrailer(&t)
+		mobs = append(mobs, &t)
+	}
 
 	pixelgl.Run(run)
 }

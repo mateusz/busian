@@ -54,6 +54,9 @@ type mobile interface {
 	Update(dt float64)
 	Draw(pixel.Target)
 	GetZ() float64
+	GetX() float64
+	GetY() float64
+	Colliding(mobile, float64) bool
 }
 
 type steerable interface {
@@ -79,8 +82,20 @@ func (v *vehicle) GetZ() float64 {
 	return v.wp.Y
 }
 
+func (v *vehicle) GetY() float64 {
+	return v.wp.Y
+}
+
+func (v *vehicle) GetX() float64 {
+	return v.wp.X
+}
+
 func (v *vehicle) Update(dt float64) {
 	v.wp = v.wp.Add(v.v.Scaled(dt))
+}
+
+func (v * vehicle) Colliding(m2 mobile, d float64) bool {
+	return math.Abs(v.wp.X-m2.GetX()) < d && math.Abs(v.wp.Y-m2.GetY()) < d
 }
 
 type player struct {
@@ -168,7 +183,7 @@ func (p *player) Steer(dt float64, w *pixelgl.Window) {
 	p.v = d.Scaled(v)
 
 	p.vHistory.PushFront(p.v)
-	for i := p.vHistory.Len(); i>2000; i-- {
+	for i := p.vHistory.Len(); i>5000; i-- {
 		p.vHistory.Remove(p.vHistory.Back())
 	}
 
@@ -310,7 +325,7 @@ func main() {
 	p1.spriteset = &mobSprites
 	p1.startID = 16
 	p1.c = controls{Up:pixelgl.KeyW, Down:pixelgl.KeyS, Left:pixelgl.KeyA, Right:pixelgl.KeyD}
- 	p1.colorMask = color.RGBA{255,100,100,255}
+ 	p1.colorMask = color.RGBA{100,100,255,255}
 
 	p2.vHistory = list.New()
 	p2.trailers = list.New()
@@ -393,6 +408,8 @@ func run() {
 		ensureTrailers()
 		collectTrailers(&p1)
 		collectTrailers(&p2)
+		collide(p1.trailers, &p2, 16.0)
+		collide(p2.trailers, &p1, 16.0)
 
 		for _, s := range steerables {
 			s.Steer(dt, win)
@@ -486,7 +503,7 @@ func ensureTrailers() {
 			wp: wp,
 			spriteset: &mobSprites,
 			startID: 20,
-			colorMask: colornames.White,
+			colorMask: colornames.Yellow,
 		}
 		trailers.PushBack(&t)
 		mobs = append(mobs, &t)
@@ -496,9 +513,22 @@ func ensureTrailers() {
 func collectTrailers(p *player) {
 	for t := trailers.Front(); t != nil; t = t.Next() {
 		v := t.Value.(*vehicle)
-		if math.Abs(v.wp.X-p.wp.X) < 16.0 && math.Abs(v.wp.Y-p.wp.Y) < 16.0 {
+		if v.Colliding(p, 16.0) {
 			trailers.Remove(t)
 			p.AddTrailer(v)
+		}
+	}
+}
+
+func collide(t *list.List, p *player, d float64) {
+	for e1 := t.Front(); e1 != nil; e1 = e1.Next() {
+		v1 := e1.Value.(*vehicle)
+		if v1.Colliding(p, d) {
+			t.Remove(e1)
+			trailers.PushBack(v1)
+			v1.colorMask = colornames.Yellow
+			v1.v = pixel.Vec{}
+			break
 		}
 	}
 }

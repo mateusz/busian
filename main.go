@@ -1,28 +1,28 @@
 package main
 
 import (
+	"container/list"
 	"encoding/csv"
 	"encoding/xml"
 	"errors"
 	"fmt"
 	"image"
+	"image/color"
 	"math"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
-	"container/list"
-	"image/color"
-	"math/rand"
 
 	_ "image/png"
 
 	"github.com/faiface/pixel"
-	"github.com/faiface/pixel/text"
 	"github.com/faiface/pixel/imdraw"
 	"github.com/faiface/pixel/pixelgl"
+	"github.com/faiface/pixel/text"
 	"github.com/lafriks/go-tiled"
 	"golang.org/x/image/colornames"
 	"golang.org/x/image/font/basicfont"
@@ -38,16 +38,16 @@ const (
 )
 
 var (
-	workDir		string
+	workDir     string
 	terra       spriteset
-	mobSprites	spriteset
+	mobSprites  spriteset
 	mobs        []mobile
-	steerables []steerable
-	p1         player
-	p2      player
+	steerables  []steerable
+	p1          player
+	p2          player
 	tmx         *tiled.Map
 	frictionMap [][]int
-	trailers *list.List
+	trailers    *list.List
 )
 
 type mobile interface {
@@ -94,13 +94,13 @@ func (v *vehicle) Update(dt float64) {
 	v.wp = v.wp.Add(v.v.Scaled(dt))
 }
 
-func (v * vehicle) Colliding(m2 mobile, d float64) bool {
+func (v *vehicle) Colliding(m2 mobile, d float64) bool {
 	return math.Abs(v.wp.X-m2.GetX()) < d && math.Abs(v.wp.Y-m2.GetY()) < d
 }
 
 type player struct {
 	vehicle
-	c controls
+	c        controls
 	trailers *list.List
 	vHistory *list.List
 }
@@ -124,9 +124,9 @@ func (p *player) Steer(dt float64, w *pixelgl.Window) {
 	if w.Pressed(p.c.Down) && p.v.Y > 0.0 {
 		isBraking = true
 	}
-	
+
 	// Read one of the 8 cardinal directions for acceleration.
-	d := pixel.Vec{X:0, Y:0}
+	d := pixel.Vec{X: 0, Y: 0}
 	isAccelerating := false
 	if w.Pressed(p.c.Right) {
 		d = d.Add(pixel.Vec{X: 1.0})
@@ -146,9 +146,9 @@ func (p *player) Steer(dt float64, w *pixelgl.Window) {
 	// Normalise direction to l=1.0
 	// Prevent direction change if braking
 	if isAccelerating && !isBraking {
-		d = d.Scaled(1.0/d.Len())
-	} else if p.v.Len()>0.0 {
-		d = p.v.Scaled(1.0/p.v.Len())
+		d = d.Scaled(1.0 / d.Len())
+	} else if p.v.Len() > 0.0 {
+		d = p.v.Scaled(1.0 / p.v.Len())
 	} // Otherwise no direction from velocity.
 
 	// Get current velocity
@@ -168,22 +168,22 @@ func (p *player) Steer(dt float64, w *pixelgl.Window) {
 	}
 	maxSpeed := topSpeed / frCoef
 	fr := v - maxSpeed
-	if fr>0.0 {
-		v -= fr * dt * (topSpeed/6.0)
+	if fr > 0.0 {
+		v -= fr * dt * (topSpeed / 6.0)
 	}
-	v -= (topSpeed/6.0) * dt
+	v -= (topSpeed / 6.0) * dt
 
-	if v<0.0 {
+	if v < 0.0 {
 		v = 0.0
 	}
-	if v>topSpeed {
+	if v > topSpeed {
 		v = topSpeed
 	}
 
 	p.v = d.Scaled(v)
 
 	p.vHistory.PushFront(p.v)
-	for i := p.vHistory.Len(); i>5000; i-- {
+	for i := p.vHistory.Len(); i > 5000; i-- {
 		p.vHistory.Remove(p.vHistory.Back())
 	}
 
@@ -199,13 +199,13 @@ func (p *player) Steer(dt float64, w *pixelgl.Window) {
 		for start = p.vHistory.Front(); start != nil; start = start.Next() {
 			vh := start.Value.(pixel.Vec)
 			startDelay += vh.Len()
-			if startDelay > trailerDelay * 64.0 {
+			if startDelay > trailerDelay*64.0 {
 				// We found the right spot, looking back.
 				break
 			}
 		}
 
-		if start==nil {
+		if start == nil {
 			// Not enough history
 			break
 		}
@@ -216,10 +216,10 @@ func (p *player) Steer(dt float64, w *pixelgl.Window) {
 		for step := start; step != nil; step = step.Prev() {
 			vh := step.Value.(pixel.Vec)
 
-			if endDelay+vh.Len()>p.v.Len() {
+			if endDelay+vh.Len() > p.v.Len() {
 				// Moved too far.
-				remainder := p.v.Len()-endDelay
-				totalV = totalV.Add(vh.Scaled(remainder/vh.Len()))
+				remainder := p.v.Len() - endDelay
+				totalV = totalV.Add(vh.Scaled(remainder / vh.Len()))
 				break
 			}
 			endDelay += vh.Len()
@@ -229,13 +229,13 @@ func (p *player) Steer(dt float64, w *pixelgl.Window) {
 		// Compute a fix if falling out of line
 		trailer := et.Value.(*vehicle)
 		trailerDisplacement := trailer.wp.Sub(prevTrailerPos)
-		if trailerDisplacement.Len()>=gap+0.5 && prevTrailerV.Len()>0.0 {
+		if trailerDisplacement.Len() >= gap+0.5 && prevTrailerV.Len() > 0.0 {
 			// Totally out of whack, try fixing more permanently.
-			direction := prevTrailerV.Scaled(1.0/prevTrailerV.Len())
+			direction := prevTrailerV.Scaled(1.0 / prevTrailerV.Len())
 			trailer.wp = prevTrailerPos.Sub(direction.Scaled(gap))
-		} else if trailerDisplacement.Len()>gap {
+		} else if trailerDisplacement.Len() > gap {
 			// Soft fixing.
-			remainder := (trailerDisplacement.Len()-gap)
+			remainder := (trailerDisplacement.Len() - gap)
 			scaleDisp := remainder / trailerDisplacement.Len()
 			fix := trailerDisplacement.Scaled(scaleDisp)
 			trailer.wp = trailer.wp.Sub(fix)
@@ -250,9 +250,9 @@ func (p *player) Steer(dt float64, w *pixelgl.Window) {
 }
 
 type controls struct {
-	Up pixelgl.Button 
-	Down pixelgl.Button
-	Left pixelgl.Button
+	Up    pixelgl.Button
+	Down  pixelgl.Button
+	Left  pixelgl.Button
 	Right pixelgl.Button
 }
 
@@ -291,11 +291,11 @@ func main() {
 	rand.Seed(time.Now().UnixNano())
 
 	var err error
-    workDir, err := filepath.Abs(filepath.Dir(os.Args[0]))
-    if err != nil {
+	workDir, err := filepath.Abs(filepath.Dir(os.Args[0]))
+	if err != nil {
 		fmt.Printf("Error checking working dir: %s\n", err)
 		os.Exit(2)
-    }
+	}
 
 	tmx, err = tiled.LoadFromFile(fmt.Sprintf("%s/assets/map4.tmx", workDir))
 	if err != nil {
@@ -324,15 +324,15 @@ func main() {
 	p1.trailers = list.New()
 	p1.spriteset = &mobSprites
 	p1.startID = 16
-	p1.c = controls{Up:pixelgl.KeyW, Down:pixelgl.KeyS, Left:pixelgl.KeyA, Right:pixelgl.KeyD}
- 	p1.colorMask = color.RGBA{100,100,255,255}
+	p1.c = controls{Up: pixelgl.KeyW, Down: pixelgl.KeyS, Left: pixelgl.KeyA, Right: pixelgl.KeyD}
+	p1.colorMask = color.RGBA{100, 100, 255, 255}
 
 	p2.vHistory = list.New()
 	p2.trailers = list.New()
 	p2.spriteset = &mobSprites
 	p2.startID = 16
-	p2.c = controls{Up:pixelgl.KeyUp, Down:pixelgl.KeyDown, Left:pixelgl.KeyLeft, Right:pixelgl.KeyRight}
-	p2.colorMask = color.RGBA{100,255,100,255}
+	p2.c = controls{Up: pixelgl.KeyUp, Down: pixelgl.KeyDown, Left: pixelgl.KeyLeft, Right: pixelgl.KeyRight}
+	p2.colorMask = color.RGBA{100, 255, 100, 255}
 
 	steerables = []steerable{&p1, &p2}
 	mobs = []mobile{&p1, &p2}
@@ -366,20 +366,20 @@ func run() {
 	frictionMap := imdraw.New(nil)
 	drawFrictionMap(frictionMap)
 
-	worldMap := pixelgl.NewCanvas(pixel.R(0, 0, float64(tmx.Width * tmx.TileWidth), float64(tmx.Height * tmx.TileHeight)))
+	worldMap := pixelgl.NewCanvas(pixel.R(0, 0, float64(tmx.Width*tmx.TileWidth), float64(tmx.Height*tmx.TileHeight)))
 	drawMap(worldMap)
 
 	p1.wp = pixel.Vec{
-		X: float64(tmx.Width * tmx.TileWidth)/2.0,
-		Y: float64(tmx.Height * tmx.TileHeight)/2.0,
+		X: float64(tmx.Width*tmx.TileWidth) / 2.0,
+		Y: float64(tmx.Height*tmx.TileHeight) / 2.0,
 	}
 	p2.wp = pixel.Vec{
-		X: float64(tmx.Width * tmx.TileWidth)/2.0+32.0,
-		Y: float64(tmx.Height * tmx.TileHeight)/2.0,
+		X: float64(tmx.Width*tmx.TileWidth)/2.0 + 32.0,
+		Y: float64(tmx.Height*tmx.TileHeight) / 2.0,
 	}
 
-	p1view := pixelgl.NewCanvas(pixel.R(0,0,monW/2/pixSize, monH/pixSize))
-	p2view := pixelgl.NewCanvas(pixel.R(0,0,monW/2/pixSize, monH/pixSize))
+	p1view := pixelgl.NewCanvas(pixel.R(0, 0, monW/2/pixSize, monH/pixSize))
+	p2view := pixelgl.NewCanvas(pixel.R(0, 0, monW/2/pixSize, monH/pixSize))
 
 	hud := pixelgl.NewCanvas(pixel.R(0, 0, monW/pixSize, monH/pixSize))
 
@@ -402,8 +402,8 @@ func run() {
 		dt := time.Since(last).Seconds()
 		last = time.Now()
 
-		fpsAvg -= fpsAvg/50.0
-		fpsAvg += 1.0/dt/50.0
+		fpsAvg -= fpsAvg / 50.0
+		fpsAvg += 1.0 / dt / 50.0
 
 		ensureTrailers()
 		collectTrailers(&p1)
@@ -435,12 +435,12 @@ func run() {
 		p2view.Clear(colornames.Green)
 
 		worldMap.Draw(p1view, pixel.IM.Moved(pixel.Vec{
-			X:worldMap.Bounds().W()/2.0,
-			Y:worldMap.Bounds().H()/2.0,
+			X: worldMap.Bounds().W() / 2.0,
+			Y: worldMap.Bounds().H() / 2.0,
 		}))
 		worldMap.Draw(p2view, pixel.IM.Moved(pixel.Vec{
-			X:worldMap.Bounds().W()/2.0,
-			Y:worldMap.Bounds().H()/2.0,
+			X: worldMap.Bounds().W() / 2.0,
+			Y: worldMap.Bounds().H() / 2.0,
 		}))
 
 		if win.Pressed(pixelgl.KeyG) {
@@ -476,12 +476,12 @@ func run() {
 
 		// Draw  views onto respective halves of the screen
 		p1view.Draw(win, pixel.IM.Moved(pixel.Vec{
-			X:p1view.Bounds().W()/2,
-			Y:p1view.Bounds().H()/2,
+			X: p1view.Bounds().W() / 2,
+			Y: p1view.Bounds().H() / 2,
 		}))
 		p2view.Draw(win, pixel.IM.Moved(pixel.Vec{
-			X:monW/2/pixSize+p2view.Bounds().W()/2,
-			Y:p2view.Bounds().H()/2,
+			X: monW/2/pixSize + p2view.Bounds().W()/2,
+			Y: p2view.Bounds().H() / 2,
 		}))
 
 		staticHud.Draw(hud)
@@ -493,16 +493,16 @@ func run() {
 }
 
 func ensureTrailers() {
-	missing := 100-trailers.Len()
-	for i:=0; i<missing; i++ {
+	missing := 100 - trailers.Len()
+	for i := 0; i < missing; i++ {
 		wp := pixel.Vec{
 			X: float64(rand.Intn(tmx.Width * tmx.TileWidth)),
 			Y: float64(rand.Intn(tmx.Height * tmx.TileHeight)),
 		}
 		t := vehicle{
-			wp: wp,
+			wp:        wp,
 			spriteset: &mobSprites,
-			startID: 20,
+			startID:   20,
 			colorMask: colornames.Yellow,
 		}
 		trailers.PushBack(&t)

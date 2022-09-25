@@ -1,6 +1,6 @@
 # Busian
 
-(gif will load below) 
+Animated GIF will load below in a while, or see [https://www.youtube.com/watch?v=hiS4DUY0w1o](https://www.youtube.com/watch?v=hiS4DUY0w1o) 
 
 ![](assets/trailer1.png)![](assets/trailer1.png)![](assets/trailer1.png)![](assets/trailer1.png)![](assets/trailer1.png)![](assets/trailer1.png)![](assets/trailer1.png)![](assets/trailer1.png)![](assets/trailer1.png)![](assets/trailer1.png)![](assets/trailer1.png)![](assets/truck1.png)
 
